@@ -440,7 +440,7 @@ dependencies = [
  "tokio-happy-eyeballs",
  "tokio-rustls",
  "tokio-socks",
- "tokio-tungstenite",
+ "tokio-tungstenite 0.28.0",
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -1153,7 +1153,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "tokio",
- "tokio-tungstenite",
+ "tokio-tungstenite 0.30.0",
  "tracing",
  "tracing-subscriber",
  "unicode-script",
@@ -6569,8 +6569,20 @@ dependencies = [
  "rustls-pki-types",
  "tokio",
  "tokio-rustls",
- "tungstenite",
+ "tungstenite 0.28.0",
  "webpki-roots 0.26.11",
+]
+
+[[package]]
+name = "tokio-tungstenite"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "17a073bfed563fa236697a068031408a93cd9522e08abf9933ead3e73411bd71"
+dependencies = [
+ "futures-util",
+ "log",
+ "tokio",
+ "tungstenite 0.30.0",
 ]
 
 [[package]]
@@ -6786,6 +6798,18 @@ dependencies = [
  "sha1",
  "thiserror 2.0.21",
  "utf-8",
+]
+
+[[package]]
+name = "tungstenite"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e48ac77174b19c110a50ab2128b24215ac9cb40e0e12e093fb602d175c569d22"
+dependencies = [
+ "bytes",
+ "log",
+ "rand 0.10.3",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
