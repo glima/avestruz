@@ -25,7 +25,9 @@
   <provides>
     <binary>cosmic-applet-avestruz</binary>
   </provides>
-  <url type="homepage">https://github.com/glima/avestruz</url>
+  <url type="homepage">https://glima.github.io/avestruz/</url>
+  <url type="vcs-browser">https://github.com/glima/avestruz</url>
+  <url type="help">https://glima.github.io/avestruz/doc/</url>
   <url type="bugtracker">https://github.com/glima/avestruz/issues</url>
   <developer id="io.github.glima">
     <name>Avestruz authors</name>

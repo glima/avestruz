@@ -6,6 +6,7 @@ license = "MIT"
 authors = ["Avestruz authors"]
 description = "Avestruz — a COSMIC desktop applet for Nostr"
 repository = "https://github.com/glima/avestruz"
+homepage = "https://glima.github.io/avestruz/"
 
 [package.metadata.cargo-machete]
 # libcosmic re-exports its public API under the `cosmic` namespace, so

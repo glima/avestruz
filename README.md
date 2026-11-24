@@ -1,5 +1,15 @@
 # Avestruz
 
+[![CI](https://github.com/glima/avestruz/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/glima/avestruz/actions/workflows/ci.yml?query=branch%3Amain)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/glima/avestruz/badge)](https://scorecard.dev/viewer/?uri=github.com/glima/avestruz)
+[![Codecov](https://codecov.io/gh/glima/avestruz/graph/badge.svg)](https://codecov.io/gh/glima/avestruz)
+[![GitHub Release](https://img.shields.io/github/release/glima/avestruz.svg)](https://github.com/glima/avestruz/releases/latest)
+![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
+
+**[Website](https://glima.github.io/avestruz/)** ·
+**[Documentation](https://glima.github.io/avestruz/doc/)** ·
+**[Releases](https://github.com/glima/avestruz/releases)**
+
 A [Nostr](https://github.com/nostr-protocol/nostr) client that lives in the
 [COSMIC™](https://system76.com/cosmic) desktop panel: a panel button, and a
 popup that holds the whole client, drawn by the GPU.
@@ -620,6 +630,10 @@ comments, and built into pages by `just doc-open`. The way in is the
 | `guide::decisions` | What was decided and why, the rules everything keeps to, and what is not there yet |
 | `guide::testing` | How it is tested, what is not, and every test by name |
 
+The documentation as it is on `main` is published at
+<https://glima.github.io/avestruz/doc/>, and the guide at
+<https://glima.github.io/avestruz/doc/cosmic_applet_avestruz/guide/>.
+
 The diagrams are Mermaid, written in the doc comments as code blocks.
 `just doc` has rustdoc put a small script in each page
 (`docs/rustdoc-header.html`) that draws them in the browser, in the
@@ -642,7 +656,8 @@ written by `build.rs` from the sources each time the crate is built.
 
 ### Website
 
-The project's site is `site/`: one page that reads whole as plain HTML,
+The project's site, <https://glima.github.io/avestruz/>, is `site/`: one
+page that reads whole as plain HTML,
 and, where the machine is up to it, a scene over its first screen to walk
 about in, in which each thing stands for a piece of Nostr. `just site`
 assembles it into `target/site` as GitHub Pages publishes it (it takes
@@ -650,8 +665,9 @@ assembles it into `target/site` as GitHub Pages publishes it (it takes
 the browser with the scene on (`?mode=hifi`, which asks for the scene
 whatever the machine; `just site-open ''` opens it as a visitor gets it). The scene's
 props are made by scripts, with their files kept in the repository:
-[site/craft/README.md](site/craft/README.md) says how. Nothing is
-published while the repository is private.
+[site/craft/README.md](site/craft/README.md) says how. Under `doc/` the
+site carries the documentation `just doc` builds, the guide included,
+and each push to `main` publishes both.
 
 ### Viewing logs
 
