@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Avestruz — Nostr in the COSMIC panel</title>
+  <meta name="description" content="A Nostr client that lives in the COSMIC desktop panel: your feed, threads, zaps, media and relays one click away, in pure Rust.">
+  <meta name="theme-color" content="#14101f">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Avestruz">
+  <meta property="og:description" content="Nostr, one click away in the COSMIC panel.">
+  <meta property="og:url" content="https://glima.github.io/avestruz/">
+  <meta property="og:image" content="https://glima.github.io/avestruz/assets/still.jpg">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="scene/boot.js"></script>
+</head>
+<body>
+  <header class="nav">
+    <a class="brand" href="#top">
+      <img src="assets/icon.svg" alt="" width="32" height="32">
+      <span>Avestruz</span>
+    </a>
+    <nav aria-label="Sections">
+      <a href="#nostr">Nostr</a>
+      <a href="#features">Features</a>
+      <a href="#install">Install</a>
+      <a href="#security">Security</a>
+      <a class="nav-gh" href="https://github.com/glima/avestruz">GitHub</a>
+    </nav>
+    <div class="modes" role="group" aria-label="How this page is drawn" hidden>
+      <button type="button" data-mode="hifi" aria-pressed="false" title="A scene to walk about in">Hi-fi</button>
+      <button type="button" data-mode="auto" aria-pressed="true" title="The scene where it would run well">Auto</button>
+      <button type="button" data-mode="lofi" aria-pressed="false" title="The plain page">Lo-fi</button>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div id="stage" class="stage">
+        <img class="still" src="assets/still.jpg" width="1600" height="900" alt="A plain at dusk: an ostrich among the things Nostr is made of — a relay mast, lines on poles, a bunker with a key, a mailbox, a flower, a storm cloud over a lightning rod.">
+        <p id="stage-note" class="stage-note" hidden>The scene could not start here, so this is the plain page.</p>
+        <p class="stage-wait" aria-hidden="true">Setting the scene…</p>
+        <aside id="tour" class="tour" hidden aria-live="polite">
+          <button type="button" class="tour-close" aria-label="Back to the plain">×</button>
+          <div class="tour-body"></div>
+          <div class="tour-nav">
+            <button type="button" data-step="-1" aria-label="The one before">←</button>
+            <span class="tour-count"></span>
+            <button type="button" data-step="1" aria-label="The next one">→</button>
+          </div>
+        </aside>
+        <nav id="tour-strip" class="tour-strip" aria-label="Things to go up to" hidden></nav>
+      </div>
+      <div class="hero-text">
+        <p class="eyebrow">A Nostr client for COSMIC™</p>
+        <h1>Nostr,<br><span class="dusk">one click away.</span></h1>
+        <p class="lead">
+          Avestruz lives in your COSMIC panel: the feed, threads, zaps and
+          your relays in a popup drawn by the GPU. Pure Rust, no webview.
+        </p>
+        <div class="cta">
+          <a class="button primary" href="#install">Get it</a>
+          <a class="button ghost" href="https://github.com/glima/avestruz">Source on GitHub</a>
+        </div>
+        <ul class="facts">
+          <li>COSMIC panel applet</li>
+          <li>Keyboard all the way</li>
+          <li>Free software, MIT</li>
+        </ul>
+        <p class="hint">Everything out there stands for a piece of Nostr. Click one to go up to it.</p>
+      </div>
+    </section>
+
+    <section id="nostr" class="subjects band">
+      <div class="section-head">
+        <h2>Nostr, piece by piece</h2>
+        <p>An open protocol with no company in the middle. These are its parts, and what Avestruz does with each.</p>
+      </div>
+      <div class="subject-grid">
+        <article class="card subject" data-subject="nostr">
+          <p class="where">The ostrich</p>
+          <h3>Notes and other stuff</h3>
+          <p><strong>Nostr</strong> is short for “Notes and Other Stuff Transmitted by Relays”. You are a key pair, what you say is a note you sign, and relays pass notes along. Any client reads the same notes, so nobody owns your account or your audience.</p>
+          <p>Its people call themselves ostriches. <em>Avestruz</em> is the Portuguese for one.</p>
+          <p class="nips"><a href="https://github.com/nostr-protocol/nips/blob/master/01.md">NIP-01</a></p>
+        </article>
+        <article class="card subject" data-subject="relays">
+          <p class="where">The mast</p>
+          <h3>Relays</h3>
+          <p>A relay is a plain server that keeps notes and hands them on. Nobody has to share one: each account says where it writes and where it reads, and a client looks for people there — the outbox model.</p>
+          <p>Avestruz reads everyone from the relays they write to, shows what each relay says of itself and warns about what it asks for, and lets you edit your own lists. No relay is built in for search or media: those are yours to choose.</p>
+          <p class="nips"><a href="https://github.com/nostr-protocol/nips/blob/master/65.md">NIP-65</a> <a href="https://github.com/nostr-protocol/nips/blob/master/11.md">NIP-11</a></p>
+        </article>
+        <article class="card subject" data-subject="notes">
+          <p class="where">The lines</p>
+          <h3>Notes</h3>
+          <p>Everything on Nostr is an event: a little signed message with a kind. A text note, a reply, a repost, a reaction, a comment — each travels from relay to relay, and anyone can check who signed it.</p>
+          <p>Avestruz shows the notes of the people you follow, with or without replies, opens any of them as its whole conversation, shows quoted notes in place, and keeps what it has seen so the feed is there at once the next time.</p>
+          <p class="nips"><a href="https://github.com/nostr-protocol/nips/blob/master/10.md">NIP-10</a> <a href="https://github.com/nostr-protocol/nips/blob/master/18.md">NIP-18</a> <a href="https://github.com/nostr-protocol/nips/blob/master/22.md">NIP-22</a> <a href="https://github.com/nostr-protocol/nips/blob/master/25.md">NIP-25</a></p>
+        </article>
+        <article class="card subject" data-subject="keys">
+          <p class="where">The bunker</p>
+          <h3>Keys</h3>
+          <p>Your identity is a key. The public half (<code>npub</code>) is your name; the secret half (<code>nsec</code>) signs what you say, and there is no “forgot my password”. A remote signer, a <em>bunker</em>, can hold the secret and sign on request, so a client never sees it.</p>
+          <p>Sign in to Avestruz with an <code>nsec</code>, an <code>npub</code> to only read, or a <code>bunker://</code> address. Whatever is secret is kept in the system keyring and nowhere else.</p>
+          <p class="nips"><a href="https://github.com/nostr-protocol/nips/blob/master/19.md">NIP-19</a> <a href="https://github.com/nostr-protocol/nips/blob/master/46.md">NIP-46</a></p>
+        </article>
+        <article class="card subject" data-subject="zaps">
+          <p class="where">The lightning rod</p>
+          <h3>Zaps</h3>
+          <p>A zap is a Lightning payment pinned to a note: a few sats sent straight to its author, with a receipt the relays carry so everyone can see it landed.</p>
+          <p>Avestruz counts the sats under every note and shows who sent them. To zap, it asks the author's Lightning address for an invoice and shows it as a QR code for your wallet; it holds no money itself, and says when the zap went through.</p>
+          <p class="nips"><a href="https://github.com/nostr-protocol/nips/blob/master/57.md">NIP-57</a></p>
+        </article>
+        <article class="card subject" data-subject="media">
+          <p class="where">The flower</p>
+          <h3>Pictures and videos</h3>
+          <p>Notes are text. Pictures and videos live on media servers, filed under their own hash, and a note links to them — Blossom, as the scheme is called. Lose a server and the same file can be found on another.</p>
+          <p>Avestruz sends what you attach to your own servers and has the others fetch a copy. Before a picture leaves, everything in the file that is not the picture — where and when it was taken, with what — is left out. Videos play right in the feed, YouTube links too.</p>
+          <p class="nips"><a href="https://github.com/hzrd149/blossom">Blossom</a> <a href="https://github.com/nostr-protocol/nips/blob/master/92.md">NIP-92</a></p>
+        </article>
+        <article class="card subject" data-subject="writing">
+          <p class="where">The mailbox</p>
+          <h3>Writing</h3>
+          <p>To publish is to sign a note and give it to relays: your own, and the ones the people you mention read. It counts once a relay has taken it.</p>
+          <p>Avestruz has a composer for notes, replies and quotes. What you wrote and did not send is never lost: it is encrypted to yourself and kept as a draft by a relay Avestruz runs inside itself, which listens on no port and serves nobody else.</p>
+          <p class="nips"><a href="https://github.com/nostr-protocol/nips/blob/master/37.md">NIP-37</a> <a href="https://github.com/nostr-protocol/nips/blob/master/44.md">NIP-44</a></p>
+        </article>
+        <article class="card subject" data-subject="panel">
+          <p class="where">The screen</p>
+          <h3>In the panel</h3>
+          <p>Avestruz is a button in the COSMIC panel and a popup that holds the whole client, as tall as your screen has room for. A key of your choosing opens it from anywhere.</p>
+          <p>Inside, the keyboard does everything: <kbd>j</kbd> and <kbd>k</kbd> walk the notes, <kbd>l</kbd> opens a thread, <kbd>r</kbd> replies, <kbd>z</kbd> zaps, <kbd>b</kbd> bookmarks, <kbd>?</kbd> lists the rest. Close it mid-sentence and it is all still there when you come back.</p>
+        </article>
+        <article class="card subject" data-subject="search">
+          <p class="where">The telescope</p>
+          <h3>Search</h3>
+          <p>No relay has everything, so search is something particular relays offer, and your account lists the ones you trust to do it.</p>
+          <p>Avestruz asks those and no others, for people and for notes at once, and puts the people you follow first. Nothing you search for is kept. Paste an <code>npub</code>, a note's address or a name at a domain and it opens straight away.</p>
+          <p class="nips"><a href="https://github.com/nostr-protocol/nips/blob/master/50.md">NIP-50</a> <a href="https://github.com/nostr-protocol/nips/blob/master/05.md">NIP-05</a></p>
+        </article>
+        <article class="card subject" data-subject="bookmarks">
+          <p class="where">The book</p>
+          <h3>Bookmarks</h3>
+          <p>Lists are notes too: who you follow, what you keep, which relays you use. Part of a list can be encrypted, so that only you can read it, wherever you sign in.</p>
+          <p>Avestruz keeps bookmarks that way, private, and has a page to browse them. Bookmarked notes are also never dropped from its local store.</p>
+          <p class="nips"><a href="https://github.com/nostr-protocol/nips/blob/master/51.md">NIP-51</a></p>
+        </article>
+      </div>
+    </section>
+
+    <section id="features" class="features">
+      <div class="section-head">
+        <h2>A whole client in a popup</h2>
+        <p>Native to the desktop, quick to open, quick to put away.</p>
+      </div>
+      <div class="feature-grid">
+        <article class="card">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 11h16M4 16h10"/></svg>
+          <h3>The feed</h3>
+          <p>Notes from the people you follow, with or without replies. What was seen before shows at once; new notes wait behind a button, so the list never jumps under you.</p>
+        </article>
+        <article class="card">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v9H10l-5 4z"/></svg>
+          <h3>Threads and quotes</h3>
+          <p>Any note opens as its conversation. Quoted notes show in place, long notes fold, links get a preview card.</p>
+        </article>
+        <article class="card">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4-1L19 8l-3-3L5 16z"/><path d="M14 7l3 3"/></svg>
+          <h3>Writing, with drafts</h3>
+          <p>Notes, replies and quotes, published to your relays and to those of the people you name. Leave whenever: the draft is kept, encrypted, across restarts.</p>
+        </article>
+        <article class="card">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 16l5-5 4 4 3-3 6 6"/></svg>
+          <h3>Attachments</h3>
+          <p>Pictures, videos and sounds from the file chooser or the clipboard, sent to your media servers and mirrored. Pictures go out with their metadata removed.</p>
+        </article>
+        <article class="card">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9.5v5l4.5-2.5z"/></svg>
+          <h3>Videos in place</h3>
+          <p>A video plays in its note through GStreamer, with sound, seeking and speed. YouTube links play there too, with yt-dlp — there is no web engine inside.</p>
+        </article>
+        <article class="card">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3L5 13h6l-1 8 8-10h-6z"/></svg>
+          <h3>Reactions and zaps</h3>
+          <p>React with any emoji, repost or quote, zap by QR code. A right click on a count shows who they were.</p>
+        </article>
+        <article class="card">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 17V11a6 6 0 0112 0v6l2 2H4z"/><path d="M10 21h4"/></svg>
+          <h3>Notifications</h3>
+          <p>Replies, mentions, quotes, reactions, reposts and zaps in one page, each with the note it is about.</p>
+        </article>
+        <article class="card">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10v16l-5-4-5 4z"/></svg>
+          <h3>Private bookmarks</h3>
+          <p>Kept encrypted in your own list, so they follow your account and nobody else reads them.</p>
+        </article>
+        <article class="card">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg>
+          <h3>Search</h3>
+          <p>People and notes, on the search relays you chose. Names, <code>npub</code>s and note addresses open directly.</p>
+        </article>
+        <article class="card">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20V10"/><path d="M8 20h8"/><path d="M7 8a7 7 0 0110 0M4.5 5.5a10.5 10.5 0 0115 0"/></svg>
+          <h3>Your relays, your way</h3>
+          <p>The outbox model throughout, a page for your relay lists with what each relay asks of you, and a look at any relay by its address.</p>
+        </article>
+        <article class="card">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M7 10h1M11 10h1M15 10h1M8 14h8"/></svg>
+          <h3>Keyboard all the way</h3>
+          <p>Move, open, reply, zap, bookmark, play and share without the mouse. One key opens the popup, another shows what every key does.</p>
+        </article>
+        <article class="card">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/></svg>
+          <h3>Where you left it</h3>
+          <p>The popup closes on a click outside; nothing in it is lost. The feed, how far it was scrolled and whatever you were writing are there when it opens again.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="install" class="install band">
+      <div class="section-head">
+        <h2>Get it</h2>
+        <p>Packages for Debian, Ubuntu and RPM distributions, a tarball for the rest, or build it from source.</p>
+      </div>
+      <div class="install-grid">
+        <!-- downloads -->
+        <article class="card install-card">
+          <h3>From source</h3>
+          <p>A Rust toolchain and <a href="https://github.com/casey/just">just</a>, plus what any libcosmic application needs and the GStreamer development packages.</p>
+          <div class="code"><pre><code>git clone https://github.com/glima/avestruz.git
+cd avestruz
+just build-release &amp;&amp; sudo just install</code></pre><button class="copy" type="button" hidden>Copy</button></div>
+          <p class="note">Dependencies per distribution are listed in the <a href="https://github.com/glima/avestruz#building">README</a>.</p>
+        </article>
+        <article class="card install-card">
+          <h3>Then, in COSMIC</h3>
+          <p>Add <strong>Avestruz</strong> to the panel from Settings → Desktop → Panel → Applets. To open it with a key, bind one to:</p>
+          <div class="code"><pre><code>cosmic-applet-avestruz --toggle</code></pre><button class="copy" type="button" hidden>Copy</button></div>
+          <p class="note">Videos play with the GStreamer plugins on your machine; YouTube links need <a href="https://github.com/yt-dlp/yt-dlp">yt-dlp</a>.</p>
+        </article>
+      </div>
+      <p class="fineprint">Avestruz is young: expect it to change often.</p>
+    </section>
+
+    <section id="security" class="security">
+      <div class="section-head">
+        <h2>Built with care</h2>
+        <p>A client holds the key to who you are. It should deserve that.</p>
+      </div>
+      <div class="trust-grid">
+        <div class="trust">
+          <h3>Your key stays put</h3>
+          <p>Secrets live in the system keyring, read for each signature and not held. With a bunker, the key never reaches Avestruz at all.</p>
+        </div>
+        <div class="trust">
+          <h3>No open ports</h3>
+          <p>Nothing listens on the network. The relay it runs for your drafts is reached through a pipe inside the program, and what is unpublished is encrypted on disk.</p>
+        </div>
+        <div class="trust">
+          <h3>No servers of ours</h3>
+          <p>There is no Avestruz service, account or telemetry. Search relays and media servers are the ones you set, and media servers must be HTTPS.</p>
+        </div>
+        <div class="trust">
+          <h3>Checked continuously</h3>
+          <p>Memory-safe Rust with strict lints, dependency licence and advisory audits, fuzzing of the parsers that read what strangers send, and checksums with every release.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-brand">
+      <img src="assets/icon.svg" alt="" width="28" height="28">
+      <span>Avestruz is free software under the <a href="https://github.com/glima/avestruz/blob/main/LICENSE">MIT licence</a>.</span>
+    </div>
+    <p>Built with <a href="https://github.com/pop-os/libcosmic">libcosmic</a> and <a href="https://github.com/rust-nostr/nostr">rust-nostr</a>.
+       <a href="https://github.com/glima/avestruz/issues">Report a bug</a> ·
+       <a href="https://github.com/glima/avestruz/blob/main/CONTRIBUTING.md">Contribute</a></p>
+    <p class="legal">COSMIC is a trademark of System76. The scene on this page is made from scripts: see <a href="https://github.com/glima/avestruz/tree/main/site/craft">how</a>.</p>
+  </footer>
+
+  <script>
+    // Copy buttons are progressive enhancement: without JavaScript (or a
+    // clipboard), the commands are still plain selectable text.
+    if (navigator.clipboard) {
+      for (const button of document.querySelectorAll(".copy")) {
+        button.hidden = false;
+        button.addEventListener("click", async () => {
+          const text = button.previousElementSibling.textContent;
+          await navigator.clipboard.writeText(text);
+          button.textContent = "Copied";
+          setTimeout(() => (button.textContent = "Copy"), 1500);
+        });
+      }
+    }
+  </script>
+</body>
+</html>

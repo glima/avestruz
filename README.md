@@ -640,6 +640,18 @@ npm ci --prefix tools/mermaid-check
 The list of tests in `guide::testing`, and the count of them, are
 written by `build.rs` from the sources each time the crate is built.
 
+### Website
+
+The project's site is `site/`: one page that reads whole as plain HTML,
+and, where the machine is up to it, a scene over its first screen to walk
+about in, in which each thing stands for a piece of Nostr. `just site`
+assembles it into `target/site` as GitHub Pages publishes it (it takes
+`npm`), and `python3 -m http.server --directory target/site 8000` shows
+it; `?mode=hifi` asks for the scene whatever the machine. The scene's
+props are made by scripts, with their files kept in the repository:
+[site/craft/README.md](site/craft/README.md) says how. Nothing is
+published while the repository is private.
+
 ### Viewing logs
 
 As an applet, Avestruz logs to the journal through cosmic-panel:

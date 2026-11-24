@@ -7,3 +7,4 @@ coverage/
 # Delta agent worktrees, checked out inside this repo
 .delta/
 node_modules/
+__pycache__/

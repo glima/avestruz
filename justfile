@@ -257,6 +257,39 @@ doc *args:
 # Build documentation and open in browser
 doc-open: (doc '--open')
 
+# Assemble the project website (site/ plus the icon) into target/site,
+# exactly as the Pages workflow publishes it: the scene and three.js packed
+# into one file, and the download table filled from the latest GitHub
+# release when `gh` can reach one. Needs npm. Preview with
+# `python3 -m http.server --directory target/site 8000`.
+site out=(cargo-target-dir / 'site'):
+    #!/usr/bin/env bash
+    set -euo pipefail
+    npm ci --prefix site --omit=dev --ignore-scripts --no-audit --no-fund --silent
+    rm -rf "{{ out }}"
+    mkdir -p "{{ out }}/assets" "{{ out }}/scene"
+    cp site/index.html site/style.css "{{ out }}/"
+    cp site/scene/boot.js "{{ out }}/scene/"
+    site/node_modules/.bin/esbuild site/scene/world.js --bundle --format=esm --minify \
+        --target=es2022 --legal-comments=eof --log-level=warning --outfile="{{ out }}/scene/world.js"
+    cp -r site/assets/models site/assets/tex site/assets/still.jpg "{{ out }}/assets/"
+    cp resources/icon.svg "{{ out }}/assets/"
+    { gh release view --repo glima/avestruz --json tagName,url,assets 2>/dev/null || true; } \
+        | python3 site/downloads.py "{{ out }}/index.html"
+    echo "Site assembled in {{ out }}"
+
+# Make the website scene's props again (site/assets/models, site/assets/tex),
+# all of them or those named: SolidCraft shapes them, TextureCraft surfaces
+# them, glTF Transform packs them. See site/craft/README.md.
+site-props *names:
+    npm ci --prefix site --ignore-scripts --no-audit --no-fund --silent
+    python3 site/craft/build.py {{ names }}
+
+# Take the picture of the scene the website shows where the scene itself
+# is not drawn (site/assets/still.jpg). Needs Playwright with Chromium.
+site-still: site
+    python3 site/craft/still.py "{{ cargo-target-dir / 'site' }}" site/assets/still.jpg
+
 # Parse the diagrams in the doc comments, which rustdoc builds without reading
 mermaid-check:
     #!/usr/bin/env bash

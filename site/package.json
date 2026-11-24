@@ -1,0 +1,13 @@
+{
+  "name": "avestruz-site",
+  "private": true,
+  "description": "What the Avestruz website needs that is not written here: three.js, which draws its scene; esbuild, which packs the scene into one file; and glTF Transform, which packs the scene's props.",
+  "license": "MIT",
+  "dependencies": {
+    "esbuild": "0.28.2",
+    "three": "0.187.0"
+  },
+  "devDependencies": {
+    "@gltf-transform/cli": "4.5.1"
+  }
+}

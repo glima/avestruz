@@ -28,3 +28,11 @@ updates:
     ignore:
       # At the revision the main crate is at: see above.
       - dependency-name: "libcosmic"
+
+  # What the website is built with (three.js, esbuild, glTF Transform).
+  # Never ships in the applet.
+  - package-ecosystem: "npm"
+    directory: "/site"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 5
