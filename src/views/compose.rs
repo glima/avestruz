@@ -29,7 +29,6 @@ use crate::fl;
 use crate::helpers::{relative_time, truncate_chars, unix_now};
 use crate::messages::Message;
 use crate::nostr::compose::Target;
-use crate::nostr::content::Segment;
 use crate::nostr::models::{Note, Profile, display_name};
 use crate::state::{AppModel, Composer, Upload};
 use crate::views::components::avatar;
@@ -54,12 +53,7 @@ fn plain_text(note: &Note, profiles: &HashMap<PublicKey, Profile>) -> String {
         .content
         .segments
         .iter()
-        .map(|segment| match segment {
-            Segment::Text(text) | Segment::Styled { text, .. } => text.clone(),
-            Segment::Link { label, .. } | Segment::Reference(label) => label.clone(),
-            Segment::Mention(person) => format!("@{}", display_name(profiles, person)),
-            Segment::Hashtag(hashtag) => format!("#{hashtag}"),
-        })
+        .map(|segment| segment.words(&|person| format!("@{}", display_name(profiles, person))))
         .collect();
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }

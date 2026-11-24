@@ -460,22 +460,30 @@ Early. What works today:
   fraction of the memory.
   A click on a picture opens the note, as a click on its text does.
 - **Markdown** — what a note marks is shown as it marks it: `*slanted*`
-  and `_slanted_`, `**bold**`, `~~struck out~~`, `` `code` `` in a line
-  and between two fences in lines of its own, `# headings`, `> what is
-  quoted`, `* items`, a rule (`---`), and links and pictures written
-  `[with a label](https://…)`. Nothing in a note says whether it is
-  Markdown, so nothing decides that for the whole of it: each mark is
-  taken for one only where it could be nothing else, on the edge of a
-  word and closed on its line. `2*3*4`, `snake_case`, `f**k` and a shrug
-  stay as they were written, and so does a note that marks nothing, to
-  the letter. A link that is given a label shows where it goes beside
+  and `_slanted_`, `**bold**` and `__bold__`, `~~struck out~~`,
+  `` `code` `` in a line and between two fences in lines of its own,
+  `# headings` (and a line with `===` under it), `> what is quoted`,
+  items behind `-`, `*` or `+`, boxes to tick (`- [x]`), a rule (`---`),
+  tables, links and pictures written `[with a label](https://…)`,
+  `<https://…>`, `<br>`, and a `\` before a mark that is to stay one.
+  A table is laid out in columns as wide as what they hold, each set
+  left, right or in the middle as its `:---:` says; one too wide for the
+  row is given the row and wraps what its cells hold. Nothing in a note
+  says whether it is Markdown, so nothing decides that for the whole of
+  it: each mark is taken for one only where it could be nothing else, on
+  the edge of a word and closed on its line. `2*3*4`, `snake_case`,
+  `f**k`, a shrug, a lone dash before a signature and a `#hashtag` stay
+  as they were written, and so does a note that marks nothing, to the
+  letter. A link that is given a label shows where it goes beside
   it — `the docs (docs.rs)` — since a label can say anything; what is
   code is not read for links, mentions or hashtags, and is not tagged
-  when a note is published. Headings are bold and no larger than the
-  text, and everything keeps the size and the line height it had, so a
-  row is as tall as it would be without its marks. Left as written:
-  `__double underscores__`, lists that start with `-`, `+` or a number,
-  and tables.
+  when a note is published. The first three levels of heading are
+  larger than the text, and the room a row is given before it is drawn
+  counts them, tables and all. Left as written: numbered lists, which
+  read as what they are, code set in by four spaces, footnotes, links
+  whose address is given elsewhere (`[label][1]`), and HTML other than
+  `<br>`. Lines are not joined into paragraphs: a note's line breaks are
+  its author's.
 - **Link previews** — under a note that links to a web page, a card with
   what the page says of itself: the picture it is shared with, the site,
   its title and a few words about it. A click opens

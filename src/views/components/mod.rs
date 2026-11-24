@@ -62,6 +62,7 @@ pub mod quoted_note;
 pub mod reaction_menu;
 pub mod scroll_position;
 pub mod status_line;
+pub mod table_grid;
 pub mod video_box;
 pub mod virtual_list;
 
@@ -89,6 +90,7 @@ pub use quoted_note::{quote_link, quoted_note, quoted_note_height};
 pub use reaction_menu::{emoji_search_id, reaction_menu};
 pub use scroll_position::{PlaceInScroller, Restoring, ScrollPosition, list_scroller};
 pub use status_line::status_line;
+pub use table_grid::TableGrid;
 pub use video_box::{video_box, video_height};
 pub use virtual_list::{RowHeights, VirtualList};
 

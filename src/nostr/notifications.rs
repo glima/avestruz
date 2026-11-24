@@ -40,7 +40,6 @@ use std::collections::{HashMap, HashSet};
 use nostr_sdk::prelude::{Event, EventId, Filter, Kind, PublicKey, Timestamp};
 
 use crate::helpers::truncate_chars;
-use crate::nostr::content::Segment;
 use crate::nostr::engagement::{Reaction, zap_request};
 use crate::nostr::models::Note;
 use crate::nostr::zap::invoice_millisats;
@@ -190,18 +189,7 @@ pub fn about(event: &Event) -> Option<EventId> {
 /// The start of what `note` says, on one line: what stands for it where
 /// there is no room for it.
 fn preview(note: &Note) -> String {
-    let said: String = note
-        .content
-        .segments
-        .iter()
-        .map(|segment| match segment {
-            Segment::Text(text) | Segment::Styled { text, .. } => text.clone(),
-            Segment::Link { label, .. } => label.clone(),
-            Segment::Hashtag(tag) => format!("#{tag}"),
-            Segment::Reference(label) => label.clone(),
-            Segment::Mention(_) => "@\u{2026}".to_string(),
-        })
-        .collect();
+    let said: String = note.content.segments.iter().map(|segment| segment.words(&|_| "@\u{2026}".to_string())).collect();
     let said = said.split_whitespace().collect::<Vec<_>>().join(" ");
     truncate_chars(&said, PREVIEW_MAX_CHARS).into_owned()
 }

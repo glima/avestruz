@@ -84,9 +84,9 @@ fn content_tags(text: &str, author: PublicKey) -> Vec<Tag> {
     let mut seen_hashtags = HashSet::new();
     let mut tags = Vec::new();
     let said = content::parse(text, usize::MAX);
-    for segment in said.segments {
+    for segment in content::inline(&said.segments) {
         match segment {
-            Segment::Mention(person) if seen_people.insert(person) => tags.push(Tag::public_key(person)),
+            Segment::Mention(person) if seen_people.insert(*person) => tags.push(Tag::public_key(*person)),
             // Hashtags are matched in lowercase, whatever case they were
             // written in.
             Segment::Hashtag(hashtag) if seen_hashtags.insert(hashtag.to_lowercase()) => tags.push(Tag::hashtag(hashtag)),
@@ -214,6 +214,10 @@ mod tests {
 
         assert_eq!(tags(&note), [vec!["t", "rust"]]);
         assert_eq!(note.content, text, "the text is left as it was written, marks and all");
+
+        // What is in a cell of a table is tagged as what is in a line is.
+        let note = signed(build("| tag |\n|---|\n| #nostr |", None, me.public_key()), &me);
+        assert_eq!(tags(&note), [vec!["t", "nostr"]]);
     }
 
     #[test]

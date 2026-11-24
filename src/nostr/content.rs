@@ -25,7 +25,7 @@
 use nostr_sdk::prelude::{EventId, Nip21, NostrParser, PublicKey, RelayUrl, ToBech32, Token, Url};
 
 use crate::http;
-use crate::nostr::markdown::{self, Run, Style};
+use crate::nostr::markdown::{self, Block, Run, Style};
 use crate::nostr::outbox::Whereabouts;
 use crate::youtube;
 
@@ -93,6 +93,41 @@ pub enum Segment {
     /// An article or another addressable event (`naddr1…`), as the short
     /// form of its address. Not something this client opens yet.
     Reference(String),
+    /// What stands apart from the text, between what is before it and
+    /// what is after: lines of code, a rule, a table, whose cells are
+    /// pieces like these (see [`markdown`]).
+    Block(Block<Vec<Segment>>),
+}
+
+impl Segment {
+    /// What this piece says as plain words, `named` saying who a mention
+    /// is of. What stands apart has a space on either side.
+    pub fn words(&self, named: &dyn Fn(&PublicKey) -> String) -> String {
+        match self {
+            Self::Text(text) | Self::Styled { text, .. } => text.clone(),
+            Self::Link { label, .. } | Self::Reference(label) => label.clone(),
+            Self::Mention(person) => named(person),
+            Self::Hashtag(tag) => format!("#{tag}"),
+            Self::Block(Block::Code(code)) => format!(" {code} "),
+            Self::Block(Block::Rule) => " ".to_string(),
+            Self::Block(Block::Table(table)) => {
+                let cells =
+                    table.rows.iter().flatten().map(|cell| cell.iter().map(|piece| piece.words(named)).collect::<String>());
+                format!(" {} ", cells.collect::<Vec<_>>().join(" "))
+            }
+        }
+    }
+}
+
+/// Every piece of `segments` that stands in a line of text: those in the
+/// cells of its tables too, each where it stands.
+pub fn inline(segments: &[Segment]) -> impl Iterator<Item = &Segment> {
+    segments.iter().flat_map(|segment| -> Box<dyn Iterator<Item = &Segment>> {
+        match segment {
+            Segment::Block(Block::Table(table)) => Box::new(table.rows.iter().flatten().flatten()),
+            other => Box::new(std::iter::once(other)),
+        }
+    })
 }
 
 /// Another note a note quotes: one it names by its address in the text
@@ -330,8 +365,8 @@ impl<'a> Builder<'a> {
     fn repeats(&self, space: char) -> bool {
         match self.content.segments.last() {
             Some(Segment::Text(before) | Segment::Styled { text: before, .. }) => before.ends_with(space),
+            Some(Segment::Block(_)) | None => true,
             Some(_) => false,
-            None => true,
         }
     }
 
@@ -420,8 +455,115 @@ impl<'a> Builder<'a> {
         if let Some(Segment::Text(last)) = self.content.segments.last_mut() {
             last.truncate(last.trim_end().len());
         }
+        // Under a block, it is a line of its own.
+        if matches!(self.content.segments.last(), Some(Segment::Block(_))) {
+            self.count(1);
+        }
         self.append("\u{2026}", Style::default());
         self.full = true;
+    }
+
+    /// What one run of the note comes to.
+    fn run(&mut self, run: Run) {
+        match run {
+            Run::Text { text, style } => self.read(&text, style),
+            Run::Code { .. } if self.full => {}
+            Run::Code { text, style } => {
+                self.gap = false;
+                self.text(&text, style);
+            }
+            Run::Link { url, label } => self.link(url, Some(&label), Style::default()),
+            Run::Block(block) => self.block(block),
+        }
+    }
+
+    /// What stands apart from the text: a rule; lines of code, as many as
+    /// there is room for; a table, whole or not at all.
+    fn block(&mut self, block: Block<Vec<Run>>) {
+        self.gap = false;
+        let chars = |runs: &[Run]| -> usize {
+            runs.iter()
+                .map(|run| match run {
+                    Run::Text { text, .. } | Run::Code { text, .. } => text.chars().count(),
+                    Run::Link { label, .. } => label.chars().count(),
+                    Run::Block(_) => 0,
+                })
+                .sum()
+        };
+        match block {
+            Block::Rule if !self.full => self.stand_apart(Block::Rule),
+            Block::Code(code) if !self.full => {
+                let wanted = code.chars().count();
+                let fits: String = code.chars().take(self.room).collect();
+                let fits = fits.trim_end();
+                if !fits.is_empty() {
+                    self.stand_apart(Block::Code(fits.to_string()));
+                }
+                if wanted > self.room {
+                    self.cut();
+                }
+                self.room = self.room.saturating_sub(wanted);
+            }
+            Block::Rule | Block::Code(_) => {}
+            Block::Table(table) => {
+                let wanted: usize = table.rows.iter().flatten().map(|cell| chars(cell)).sum();
+                let fits = !self.full && wanted <= self.room;
+                if !fits && !self.full {
+                    self.cut();
+                }
+                // Its cells are read as the text is, for what is in them
+                // and what they set aside, with all the room they want:
+                // whether it fits was settled above.
+                let room = std::mem::replace(&mut self.room, usize::MAX);
+                let block = Block::Table(table).map(|cell| self.cell(cell));
+                self.room = room.saturating_sub(usize::MAX - self.room);
+                if fits {
+                    self.stand_apart(block);
+                }
+            }
+        }
+    }
+
+    /// The pieces the runs of one cell of a table come to. Past the cut,
+    /// none, and only what they set aside.
+    fn cell(&mut self, runs: Vec<Run>) -> Vec<Segment> {
+        let text = std::mem::take(&mut self.content.segments);
+        let lines = std::mem::replace(&mut self.content.line_chars, vec![0]);
+        self.gap = false;
+        for run in runs {
+            self.run(run);
+        }
+        self.gap = false;
+        self.content.line_chars = lines;
+        let mut cell = std::mem::replace(&mut self.content.segments, text);
+        if let Some(Segment::Text(first)) = cell.first_mut() {
+            *first = first.trim_start().to_string();
+        }
+        if let Some(Segment::Text(last)) = cell.last_mut() {
+            last.truncate(last.trim_end().len());
+        }
+        cell.retain(|piece| !matches!(piece, Segment::Text(text) if text.is_empty()));
+        cell
+    }
+
+    /// Set `block` down after the text so far, which ends where it
+    /// starts: the blank space before it is left out, and what follows it
+    /// starts a line of its own.
+    fn stand_apart(&mut self, block: Block<Vec<Segment>>) {
+        while let Some(Segment::Text(last) | Segment::Styled { text: last, .. }) = self.content.segments.last_mut() {
+            last.truncate(last.trim_end().len());
+            if !last.is_empty() {
+                break;
+            }
+            self.content.segments.pop();
+        }
+        while self.content.line_chars.len() > 1 && self.content.line_chars.last() == Some(&0) {
+            self.content.line_chars.pop();
+        }
+        self.content.segments.push(Segment::Block(block));
+        if self.content.line_chars.last().is_some_and(|chars| *chars > 0) {
+            self.content.line_chars.push(0);
+        }
     }
 
     /// Add text in `style`, as much of it as there is room for.
@@ -564,15 +706,7 @@ pub fn parse_attached(content: &str, max_chars: usize, attached: &[Attachment]) 
 fn parse_up_to(content: &str, max_chars: usize, attached: &[Attachment]) -> (Content, bool) {
     let mut builder = Builder::new(max_chars, attached);
     for run in markdown::runs(content.trim()) {
-        match run {
-            Run::Text { text, style } => builder.read(&text, style),
-            Run::Code { .. } if builder.full => {}
-            Run::Code { text, style } => {
-                builder.gap = false;
-                builder.text(&text, style);
-            }
-            Run::Link { url, label } => builder.link(url, Some(&label), Style::default()),
-        }
+        builder.run(run);
     }
     let was_cut = builder.full;
     (builder.finish(), was_cut)
@@ -620,7 +754,7 @@ impl Content {
     /// the text, so that the rest of a note that was cut names them too
     /// once it is shown.
     pub fn mentions(&self) -> impl Iterator<Item = PublicKey> + '_ {
-        self.text(true).0.iter().filter_map(|segment| match segment {
+        inline(self.text(true).0).filter_map(|segment| match segment {
             Segment::Mention(public_key) => Some(*public_key),
             _ => None,
         })
@@ -630,7 +764,7 @@ impl Content {
 #[cfg(test)]
 mod tests {
     use super::{Attachment, Content, FEED_NOTE_MAX_CHARS, NoteImage, NoteVideo, Quote, Segment, imeta, parse, parse_attached};
-    use crate::nostr::markdown::Style;
+    use crate::nostr::markdown::{Block, Style};
     use nostr_sdk::prelude::{EventId, Keys, Nip19Event, Nip19Profile, RelayUrl, ToBech32};
 
     fn text(text: &str) -> Segment {
@@ -666,7 +800,7 @@ mod tests {
         Segment::Styled { text: text.to_string(), style }
     }
 
-    const BOLD: Style = Style { bold: true, italic: false, strike: false, code: false, quiet: false };
+    const BOLD: Style = Style { bold: true, italic: false, strike: false, code: false, quiet: false, heading: 0 };
     const ITALIC: Style = Style { italic: true, bold: false, ..BOLD };
     const CODE: Style = Style { code: true, bold: false, ..BOLD };
 
@@ -727,6 +861,59 @@ mod tests {
         let content = parse(&format!("**{}**", "bold ".repeat(40).trim_end()), 12);
         assert_eq!(content.segments, [styled("bold bold bo", BOLD), text("\u{2026}")]);
         assert!(content.whole.is_some());
+    }
+
+    #[test]
+    fn a_table_stands_apart_and_its_cells_are_read_as_the_text_is() {
+        let friend = Keys::generate().public_key();
+        let written = format!(
+            "Who:\n\n| Who | Where |\n|---|---|\n| nostr:{} | #nostr at https://example.com/page |\n| a cat | https://example.com/cat.png |\n\nso",
+            friend.to_bech32().unwrap()
+        );
+        let content = parse(&written, 10_000);
+        let [Segment::Text(before), Segment::Block(Block::Table(table)), Segment::Text(after)] = content.segments.as_slice()
+        else {
+            panic!("text, a table, text: {:?}", content.segments);
+        };
+        assert_eq!((before.as_str(), after.as_str()), ("Who:", "so"), "no line break is left on either side");
+        assert_eq!(
+            table.rows,
+            [
+                vec![vec![text("Who")], vec![text("Where")]],
+                vec![
+                    vec![Segment::Mention(friend)],
+                    vec![Segment::Hashtag("nostr".into()), text(" at "), link("https://example.com/page", "example.com/page")]
+                ],
+                // A picture in a cell is set aside, as anywhere.
+                vec![vec![text("a cat")], vec![]],
+            ]
+        );
+        assert_eq!(content.images.iter().map(|image| image.url.as_str()).collect::<Vec<_>>(), ["https://example.com/cat.png"]);
+        assert_eq!(content.preview.as_deref(), Some("https://example.com/page"));
+        assert_eq!(content.mentions().collect::<Vec<_>>(), [friend], "who is named in a cell is named");
+        // The lines of text are the two around it: its own height is its own.
+        assert_eq!(content.line_chars, [4, 2]);
+    }
+
+    #[test]
+    fn a_table_is_shown_whole_or_not_at_all_and_code_as_far_as_there_is_room() {
+        let table = "| a | b |\n|---|---|\n| one | two |\n| three | https://example.com/cat.png |";
+        let content = parse(&format!("see\n{table}"), 12);
+        assert_eq!(content.segments, [text("see\u{2026}")]);
+        assert_eq!(content.images.len(), 1, "what a cell sets aside is found past the cut");
+        let whole = content.whole.expect("it was cut");
+        assert!(matches!(whole.segments.as_slice(), [Segment::Text(_), Segment::Block(Block::Table(_))]), "{:?}", whole.segments);
+
+        let content = parse("```\nlet a = 1;\nlet b = 2;\n```", 12);
+        assert_eq!(content.segments, [Segment::Block(Block::Code("let a = 1;\nl".into())), text("\u{2026}")]);
+        assert!(content.whole.is_some());
+    }
+
+    #[test]
+    fn what_stands_apart_reads_as_words_where_there_is_one_line_for_a_note() {
+        let content = parse("Dams\n|Where|Count|\n|-|-|\n|U.S.|92,000+|\n---\n```\ncode\n```", 10_000);
+        let said: String = content.segments.iter().map(|piece| piece.words(&|_| String::new())).collect();
+        assert_eq!(said.split_whitespace().collect::<Vec<_>>().join(" "), "Dams Where Count U.S. 92,000+ code");
     }
 
     #[test]

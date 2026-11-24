@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 
 //! Markdown, as far as notes are written in it: what a note marks as
-//! bold, slanted, struck out or code, its headings, what it quotes, and
-//! the links it names by something other than their address.
+//! bold, slanted, struck out or code, its headings, what it quotes, its
+//! lists, its tables, and the links it names by something other than
+//! their address.
 //!
 //! A note is plain text, and most are only that. Some are written as
 //! Markdown, in whole or in a word, and nothing in a note says which. So
@@ -17,16 +18,18 @@
 //!     lines --> fence{"Between two fences?"}
 //!     fence -->|"yes"| block["Code, as written"]
 //!     fence -->|"no"| kind{"How the line starts"}
-//!     kind -->|"# "| heading["A heading: bold"]
+//!     kind -->|"# "| heading["A heading: bold, larger"]
 //!     kind -->|"> "| quoted["Quoted: quiet, behind a bar"]
-//!     kind -->|"* "| item["An item: behind a dot"]
+//!     kind -->|"- "| item["An item: behind a dot or a box"]
 //!     kind -->|"--- alone"| rule["A rule"]
+//!     kind -->|"cells, and --- under them"| table["A table"]
 //!     kind -->|"anything else"| text["Text"]
 //!     heading --> inline["Within the line"]
 //!     quoted --> inline
 //!     item --> inline
 //!     text --> inline
-//!     inline --> runs["Runs: text in one style, code, links"]
+//!     inline --> runs["Runs: text in one style, code, links, blocks"]
+//!     table -->|"each cell"| inline
 //!     block --> runs
 //!     rule --> runs
 //! ```
@@ -36,22 +39,31 @@
 //! | Written | Shown as | Left as written when |
 //! |---|---|---|
 //! | `*slanted*`, `_slanted_` | Slanted | The marks are inside a word (`2*3*4`, `snake_case`), have a space on their inside, are not closed on the line, have a `\` before them, or have no letter or figure between them (`*_*`) |
-//! | `**bold**`, `***both***` | Bold | Likewise (`f**k`) |
+//! | `**bold**`, `__bold__`, `***both***` | Bold | Likewise (`f**k`) |
 //! | `~~struck~~` | Struck out | Likewise; one `~` is never a mark |
 //! | `` `code` ``, with any number of backticks | Code | The same number does not close it on the line, or the backticks are inside a word (`don`t`) |
-//! | A fence of three backticks or tildes, alone at the start of a line, and what follows down to another | Code | No fence closes it |
-//! | `# Heading`, with up to six `#` | Bold | There is no space after the `#`: that is a hashtag |
-//! | `> quoted` | Quiet, behind a bar | There is no space after the `>` |
-//! | `* item` | The item, behind a dot | |
+//! | A fence of three backticks or tildes, alone at the start of a line, and what follows down to another | A block of code | No fence closes it |
+//! | `# Heading`, with up to six `#`, or a line with `===` under it | Bold, and the first three levels larger | There is no space after the `#`: that is a hashtag |
+//! | `> quoted`, `>quoted` | Quiet, behind a bar | What follows the `>` with no space is not a letter (`>_<`, `>100`) |
+//! | `- item`, `* item`, `+ item`, set in or not | The item, behind a dot | No other item stands on the line before or after: that is a dash, a footnote, a signature |
+//! | `- [ ] to do`, `- [x] done` | The item, behind a box, ticked or not | |
+//! | `1. item` | As written: it reads as what it is | |
 //! | `---`, `***` or `___` alone on a line | A rule | |
+//! | A line of cells between `\|`, and under it a line of `---` between as many | A table, each column set left, right or in the middle as its `:---`, `---:` or `:---:` says | The line under it is no such line |
 //! | `[label](https://…)` | A link that reads as its label | The address is not one for the web |
 //! | `![label](https://…)` | The picture or the video there, or a link | Likewise |
+//! | `<https://…>` | The link | |
+//! | `<br>` | A line break | |
+//! | `\*`, and a `\` before any other mark | The mark, and no `\` | It is a shrug (`¯\_(ツ)_/¯`): a `\_` with no letter on either side |
 //!
-//! Left as written altogether: `__double underscores__`, which more often
-//! name something (`__init__`) than stress it; lists that start with `-`,
-//! `+` or a number, which read as lists already; tables; and a `\` before a
-//! mark, which stays, since a shrug (`¯\_(ツ)_/¯`) is written more often
-//! than a mark is escaped.
+//! Not Markdown here, and left as written: a line with `---` under it (it
+//! is a line and a rule, not a heading), code set in by four spaces (notes
+//! are set in for other reasons), links whose address is given elsewhere
+//! (`[label][1]`), footnotes, and HTML other than `<br>`, which is never
+//! taken for anything.
+//!
+//! A line break is a line break: lines are not joined into paragraphs, as
+//! Markdown would have it, since a note's lines are its author's.
 //!
 //! Web addresses are passed over whole: what is in one is not a mark. A
 //! mark at the very end of one can still close what was opened before it
@@ -75,8 +87,10 @@ pub struct Style {
     pub strike: bool,
     /// Code: in a face whose letters are all as wide, as it was written.
     pub code: bool,
-    /// Quieter than the text around it: what is quoted, and a rule.
+    /// Quieter than the text around it: what is quoted.
     pub quiet: bool,
+    /// A heading of this level, 1 to 6, or 0 for none.
+    pub heading: u8,
 }
 
 impl Style {
@@ -96,16 +110,64 @@ pub enum Run {
     Code { text: String, style: Style },
     /// A link the note gives a label of its own, which may be empty.
     Link { url: Url, label: String },
+    /// What stands apart from the text, between the lines before it and
+    /// the lines after: no line break is left on either side of it.
+    Block(Block<Vec<Run>>),
+}
+
+/// What stands apart from a note's text, with cells of `Cell`: of runs
+/// here, and of what [`content`](crate::nostr::content) reads them into.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Block<Cell> {
+    /// Lines of code, as written.
+    Code(String),
+    /// A rule between two parts of a note.
+    Rule,
+    Table(Table<Cell>),
+}
+
+/// A table: its columns, and its rows of as many cells each, the first
+/// of them the one that says what the columns are.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Table<Cell> {
+    pub columns: Vec<Align>,
+    pub rows: Vec<Vec<Cell>>,
+}
+
+/// Where in its column a cell stands.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Align {
+    #[default]
+    Left,
+    Middle,
+    Right,
+}
+
+impl<Cell> Block<Cell> {
+    /// The same block, each cell of it made into another by `read`.
+    pub fn map<Other>(self, mut read: impl FnMut(Cell) -> Other) -> Block<Other> {
+        match self {
+            Self::Code(code) => Block::Code(code),
+            Self::Rule => Block::Rule,
+            Self::Table(Table { columns, rows }) => Block::Table(Table {
+                columns,
+                rows: rows.into_iter().map(|row| row.into_iter().map(&mut read).collect()).collect(),
+            }),
+        }
+    }
 }
 
 /// What stands before what a note quotes.
 const QUOTE_BAR: &str = "\u{258e} ";
 
-/// What stands before an item of a list.
+/// What stands before an item of a list, and before one that is to be
+/// done or is.
 const ITEM_DOT: &str = "\u{2022} ";
+const ITEM_TO_DO: &str = "\u{2610} ";
+const ITEM_DONE: &str = "\u{2611} ";
 
-/// A rule between two parts of a note.
-const RULE: &str = "\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}";
+/// How many cells a table may have, all told. One of more is text.
+const TABLE_MAX_CELLS: usize = 2_000;
 
 /// How deep marks inside marks are followed. Past this they are text:
 /// nobody writes them so, and a note is whatever its author sent.
@@ -139,17 +201,18 @@ fn of_a_word(c: char) -> bool {
     c.is_alphanumeric() && !unspaced(c)
 }
 
-/// Whether `c` is one of the characters marks are made of.
+/// Whether `c` is one of the characters marks are made of: what a `\`
+/// before it keeps from being one.
 fn is_mark(c: char) -> bool {
-    matches!(c, '*' | '_' | '~' | '`' | '[')
+    matches!(c, '*' | '_' | '~' | '`' | '[' | ']' | '|')
 }
 
 /// What the mark of `count` times `c` adds to a style, if it is a mark.
 fn stress(c: char, count: usize, style: Style) -> Option<Style> {
     match (c, count) {
         ('*' | '_', 1) => Some(Style { italic: true, ..style }),
-        ('*', 2) => Some(Style { bold: true, ..style }),
-        ('*', 3) => Some(Style { bold: true, italic: true, ..style }),
+        ('*' | '_', 2) => Some(Style { bold: true, ..style }),
+        ('*' | '_', 3) => Some(Style { bold: true, italic: true, ..style }),
         ('~', 2) => Some(Style { strike: true, ..style }),
         _ => None,
     }
@@ -177,6 +240,19 @@ impl Runs {
         }
     }
 
+    /// Set a block down: apart from the text, so without the line breaks
+    /// and the empty lines that stood between it and the text before.
+    fn block(&mut self, block: Block<Vec<Run>>) {
+        while let Some(Run::Text { text, .. }) = self.0.last_mut() {
+            text.truncate(text.trim_end().len());
+            if !text.is_empty() {
+                break;
+            }
+            self.0.pop();
+        }
+        self.0.push(Run::Block(block));
+    }
+
     /// All of it as text, without its styles: what a label says.
     fn said(self) -> String {
         self.0
@@ -184,6 +260,7 @@ impl Runs {
             .map(|run| match run {
                 Run::Text { text, .. } | Run::Code { text, .. } => text,
                 Run::Link { label, .. } => label,
+                Run::Block(_) => String::new(),
             })
             .collect()
     }
@@ -224,6 +301,31 @@ impl<'a> Inline<'a> {
     /// Whether the `\` at `at` stands before a mark: neither is one then.
     fn escapes(&self, at: usize) -> bool {
         self.char(at) == Some('\\') && self.char(at + 1).is_some_and(is_mark)
+    }
+
+    /// Whether the `\` at `at`, which stands before a mark, is left out
+    /// of what is shown: always, but before a `_` with no letter or
+    /// figure on either side of the two, which is the arm of a shrug.
+    fn escape_goes(&self, at: usize) -> bool {
+        let lettered = |at: Option<usize>| at.and_then(|at| self.char(at)).is_some_and(char::is_alphanumeric);
+        self.char(at + 1) != Some('_') || lettered(at.checked_sub(1)) || lettered(Some(at + 2))
+    }
+
+    /// What stands at `at` between `<` and `>`, and where it ends: a web
+    /// address, which is shown without them and read for the link it is,
+    /// or a `br`, which is a line break.
+    fn angled(&self, at: usize, style: Style) -> Option<(Run, usize)> {
+        let end =
+            (at + 1..at + LINK_PART_MAX_CHARS).find(|at| self.char(*at).is_none_or(|c| c == '>' || c == '<' || c == '\n'))?;
+        if self.char(end) != Some('>') {
+            return None;
+        }
+        let inside = self.slice(at + 1, end);
+        if matches!(inside.to_ascii_lowercase().as_str(), "br" | "br/" | "br /") {
+            return Some((Run::Text { text: "\n".to_string(), style }, end + 1));
+        }
+        let address = (inside.starts_with("https://") || inside.starts_with("http://")) && !inside.contains(char::is_whitespace);
+        address.then(|| (Run::Text { text: inside.to_string(), style }, end + 1))
     }
 
     /// Where the web address ends whose `://` starts with the `:` at
@@ -386,9 +488,14 @@ impl<'a> Inline<'a> {
             // What a mark at `at` turns into, and where reading goes on.
             let marked: Option<(Run, usize)> = match c {
                 '\\' if self.escapes(at) => {
+                    if self.escape_goes(at) {
+                        runs.text(self.slice(pending, at), style);
+                        pending = at + 1;
+                    }
                     at += 2;
                     continue;
                 }
+                '<' => self.angled(at, style),
                 '`' => match self.code(at) {
                     Some((ticks, end)) => {
                         let code = Run::Code {
@@ -432,7 +539,7 @@ impl<'a> Inline<'a> {
                     match run {
                         Run::Text { text, style } => runs.text(&text, style),
                         Run::Code { text, style } => runs.code(&text, style),
-                        link @ Run::Link { .. } => runs.0.push(link),
+                        other => runs.0.push(other),
                     }
                     at = end;
                     pending = at;
@@ -462,40 +569,67 @@ fn fence(line: &str, opening: bool) -> Option<(char, usize)> {
     (count >= 3 && fits).then_some((mark, count))
 }
 
-/// What a heading says, if `line` is one: up to six `#`, a space, and
-/// something after it, less the `#` some close a heading with, a space
-/// after what it says.
-fn heading(line: &str) -> Option<&str> {
+/// How deep a heading is and what it says, if `line` is one: up to six
+/// `#`, a space, and something after it, less the `#` some close a
+/// heading with, a space after what it says.
+fn heading(line: &str) -> Option<(u8, &str)> {
     let said = line.trim_start_matches('#');
-    let marks = line.len() - said.len();
-    if !(1..=6).contains(&marks) || !said.starts_with([' ', '\t']) {
+    let level = u8::try_from(line.len() - said.len()).ok().filter(|level| (1..=6).contains(level))?;
+    if !said.starts_with([' ', '\t']) {
         return None;
     }
     let said = said.trim();
     let open = said.trim_end_matches('#');
     let said = if open.ends_with(' ') { open.trim_end() } else { said };
-    (!said.is_empty()).then_some(said)
+    (!said.is_empty()).then_some((level, said))
 }
 
-/// What is quoted, if `line` quotes: a `>` and a space, or a `>` alone,
-/// and the same again for what is quoted in what is quoted.
+/// Whether `line` is the line under a heading written as a line of text
+/// with `===` under it.
+fn underlines(line: &str) -> bool {
+    let marks = line.trim_end();
+    marks.len() >= 3 && marks.chars().all(|c| c == '=')
+}
+
+/// What is quoted, if `line` quotes: after a `>`, or several, each with a
+/// space after it or not. With no space at all, only what starts with a
+/// letter is quoted: `>_<` is a face, and `>100` a number.
 fn quoted(line: &str) -> Option<&str> {
-    let mut said = None;
-    let mut rest = line;
-    while let Some(inner) = rest.strip_prefix('>').filter(|inner| inner.is_empty() || inner.starts_with(' ')) {
-        rest = inner.strip_prefix(' ').unwrap_or(inner);
-        said = Some(rest);
+    let mut rest = line.strip_prefix('>')?;
+    let mut spaced = false;
+    loop {
+        if let Some(inner) = rest.strip_prefix(' ') {
+            spaced = true;
+            rest = inner;
+        }
+        match rest.strip_prefix('>') {
+            Some(inner) => rest = inner,
+            None => break,
+        }
     }
-    said
+    (spaced || rest.is_empty() || rest.starts_with(char::is_alphabetic)).then_some(rest)
 }
 
-/// The room before it and what it says, if `line` is an item of a list
-/// written with `*`.
+/// The room before it and what it says, if `line` is written as an item
+/// of a list: a `-`, a `*` or a `+`, a space, and something after it.
 fn item(line: &str) -> Option<(&str, &str)> {
     let said = line.trim_start_matches(' ');
     let room = line.get(..line.len() - said.len())?;
-    let said = said.strip_prefix("* ")?.trim_start();
-    (!said.is_empty()).then_some((room, said))
+    let said = said.strip_prefix(['-', '*', '+'])?.strip_prefix(' ')?.trim_start();
+    (!said.is_empty() && !is_rule(line)).then_some((room, said))
+}
+
+/// Whether it is done and what it is, if what an item says is something
+/// to do: `[ ]` or `[x]` before it.
+fn to_do(said: &str) -> Option<(bool, &str)> {
+    let done = if said.starts_with("[ ] ") {
+        false
+    } else if said.starts_with("[x] ") || said.starts_with("[X] ") {
+        true
+    } else {
+        return None;
+    };
+    Some((done, said.get(4..)?.trim_start()))
 }
 
 /// Whether `line` is a rule: three or more of `-`, `*` or `_`, all the
@@ -509,23 +643,112 @@ fn is_rule(line: &str) -> bool {
     more.is_some_and(|count| count >= 3)
 }
 
-/// One line of a note, outside any code, read into `runs`.
-fn line(line: &str, runs: &mut Runs) {
+/// The cells of a line of a table: what stands between its `|`, less
+/// the empty one before the first `|` and after the last. A `|` with a
+/// `\` before it is no end of a cell, in code either, and is a `|` in it.
+fn cells(line: &str) -> Vec<String> {
+    let line = line.trim();
+    let mut cells = vec![String::new()];
+    let mut escaped = false;
+    for c in line.chars() {
+        let Some(cell) = cells.last_mut() else { break };
+        match c {
+            '|' if escaped => {
+                cell.pop();
+                cell.push('|');
+            }
+            '|' => cells.push(String::new()),
+            _ => cell.push(c),
+        }
+        escaped = c == '\\' && !escaped;
+    }
+    if line.starts_with('|') {
+        cells.remove(0);
+    }
+    if cells.len() > 1 && cells.last().is_some_and(|last| last.trim().is_empty()) {
+        cells.pop();
+    }
+    cells.into_iter().map(|cell| cell.trim().to_string()).collect()
+}
+
+/// Where each column stands, if `line` is the line under the first of a
+/// table: nothing but `---` between `|`, with a `:` at the end the
+/// column is set towards, or at both for the middle.
+fn columns(line: &str) -> Option<Vec<Align>> {
+    if !line.contains('|') || !line.chars().all(|c| matches!(c, '|' | '-' | ':' | ' ' | '\t')) {
+        return None;
+    }
+    cells(line)
+        .into_iter()
+        .map(|cell| {
+            let dashes = cell.trim_matches(':');
+            let lined = !dashes.is_empty() && dashes.chars().all(|c| c == '-');
+            lined.then_some(match (cell.starts_with(':'), cell.ends_with(':')) {
+                (true, true) => Align::Middle,
+                (false, true) => Align::Right,
+                _ => Align::Left,
+            })
+        })
+        .collect()
+}
+
+/// The table that starts at the first of `lines`, if one does, and how
+/// many lines it is: a line of cells, the line that says where its
+/// columns stand, and every line of cells after that.
+fn table<'a>(lines: &[&'a str]) -> Option<(Table<Vec<Run>>, usize)> {
+    let unbroken = |line: &&'a str| -> &'a str { line.strip_suffix('\r').unwrap_or(line) };
+    let (first, under) = (lines.first().map(unbroken)?, lines.get(1).map(unbroken)?);
+    if !first.contains('|') {
+        return None;
+    }
+    let columns = columns(under)?;
+    let head = cells(first);
+    if head.len() != columns.len() {
+        return None;
+    }
+    let read = |cell: String| {
+        let mut runs = Runs::default();
+        Inline::new(&cell).read(Style::default(), 0, &mut runs);
+        runs.0
+    };
+    let mut rows = vec![head.into_iter().map(read).collect::<Vec<_>>()];
+    let rest = lines.iter().skip(2).map(unbroken).take_while(|line| line.contains('|') && !line.trim().is_empty());
+    for line in rest.take(TABLE_MAX_CELLS / columns.len().max(1)) {
+        // A row has as many cells as there are columns: those it lacks
+        // are empty, and those it has too many of are left out.
+        let mut row: Vec<Vec<Run>> = cells(line).into_iter().take(columns.len()).map(read).collect();
+        row.resize(columns.len(), Vec::new());
+        rows.push(row);
+    }
+    let lines = rows.len() + 1;
+    Some((Table { columns, rows }, lines))
+}
+
+/// One line of a note, outside any block, read into `runs`. `listed`, it
+/// is an item of a list if it is written as one.
+fn line(line: &str, listed: bool, runs: &mut Runs) {
     let plain = Style::default();
     let quiet = Style { quiet: true, ..plain };
     // A line may end in the `\r` of a line break written as two
     // characters, which is no part of what it says.
     let said = line.strip_suffix('\r').unwrap_or(line);
-    if is_rule(said) {
-        runs.text(RULE, quiet);
-    } else if let Some(title) = heading(said) {
-        Inline::new(title).read(Style { bold: true, ..plain }, 0, runs);
+    if let Some((level, title)) = heading(said) {
+        Inline::new(title).read(Style { bold: true, heading: level, ..plain }, 0, runs);
     } else if let Some(quoted) = quoted(said) {
         runs.text(QUOTE_BAR, quiet);
         Inline::new(quoted).read(quiet, 0, runs);
-    } else if let Some((room, said)) = item(said) {
+    } else if let Some((room, said)) = item(said).filter(|(_, said)| listed || to_do(said).is_some()) {
         runs.text(room, plain);
-        runs.text(ITEM_DOT, plain);
+        let said = match to_do(said) {
+            Some((done, said)) => {
+                runs.text(if done { ITEM_DONE } else { ITEM_TO_DO }, plain);
+                said
+            }
+            None => {
+                runs.text(ITEM_DOT, plain);
+                said
+            }
+        };
         Inline::new(said).read(plain, 0, runs);
     } else {
         Inline::new(line).read(plain, 0, runs);
@@ -533,21 +756,23 @@ fn line(line: &str, runs: &mut Runs) {
 }
 
 /// What `content` says, as runs: its text in the styles it marks, its
-/// code, and the links it labels. Of a note that marks nothing, one run
-/// of text that is the note.
+/// code, the links it labels, and what stands apart from its text. Of a
+/// note that marks nothing, one run of text that is the note.
 pub fn runs(content: &str) -> Vec<Run> {
     let lines: Vec<&str> = content.split('\n').collect();
+    let unbroken = |at: usize| lines.get(at).map(|line| line.strip_suffix('\r').unwrap_or(line));
     let mut runs = Runs::default();
     // The fences that were looked for a closing one of and had none: no
     // fence of that character and as long or longer is closed further on.
     let mut unclosed: Vec<(char, usize)> = Vec::new();
+    // Whether a line of text was the last thing read: a line break stands
+    // between it and the next. None does on either side of a block, and
+    // the empty lines there are left out: a block stands apart as it is.
+    let mut after_text = false;
     let mut at = 0;
-    while let Some(said) = lines.get(at) {
-        if at > 0 {
-            runs.text("\n", Style::default());
-        }
-        let opened = fence(said.trim_end_matches('\r'), true)
-            .filter(|(mark, count)| !unclosed.iter().any(|(same, shorter)| same == mark && shorter <= count));
+    while let Some(said) = unbroken(at) {
+        let opened =
+            fence(said, true).filter(|(mark, count)| !unclosed.iter().any(|(same, shorter)| same == mark && shorter <= count));
         if let Some((mark, count)) = opened {
             let closes = |line: &&str| {
                 fence(line.trim_end_matches('\r'), false).is_some_and(|(same, longer)| same == mark && longer >= count)
@@ -556,14 +781,43 @@ pub fn runs(content: &str) -> Vec<Run> {
                 Some(lines_of_code) => {
                     let code: Vec<&str> =
                         lines.iter().skip(at + 1).take(lines_of_code).map(|line| line.trim_end_matches('\r')).collect();
-                    runs.code(&code.join("\n"), Style::default());
-                    at += lines_of_code + 2;
+                    runs.block(Block::Code(code.join("\n")));
+                    (after_text, at) = (false, at + lines_of_code + 2);
                     continue;
                 }
                 None => unclosed.push((mark, count)),
             }
         }
-        line(said, &mut runs);
+        if let Some((table, lines_of_it)) = lines.get(at..).and_then(table) {
+            runs.block(Block::Table(table));
+            (after_text, at) = (false, at + lines_of_it);
+            continue;
+        }
+        if is_rule(said) {
+            runs.block(Block::Rule);
+            (after_text, at) = (false, at + 1);
+            continue;
+        }
+        let after_block = matches!(runs.0.last(), Some(Run::Block(_)));
+        if after_block && !after_text && said.trim().is_empty() {
+            at += 1;
+            continue;
+        }
+        if after_text {
+            runs.text("\n", Style::default());
+        }
+        after_text = true;
+        // A line of text with `===` under it is a heading.
+        let plainly_text = !said.trim().is_empty() && heading(said).is_none() && quoted(said).is_none() && item(said).is_none();
+        if plainly_text && unbroken(at + 1).is_some_and(underlines) {
+            Inline::new(said.trim()).read(Style { bold: true, heading: 1, ..Style::default() }, 0, &mut runs);
+            at += 2;
+            continue;
+        }
+        // An item of a list has another on the line before it or after.
+        let is_item = |at: Option<usize>| at.and_then(unbroken).is_some_and(|line| item(line).is_some());
+        let listed = is_item(at.checked_sub(1)) || is_item(Some(at + 1));
+        line(lines.get(at).copied().unwrap_or_default(), listed, &mut runs);
         at += 1;
     }
     runs.0
@@ -571,9 +825,9 @@ pub fn runs(content: &str) -> Vec<Run> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Run, Style, runs};
+    use super::{Align, Block, Run, Style, Table, runs};
 
-    const PLAIN: Style = Style { bold: false, italic: false, strike: false, code: false, quiet: false };
+    const PLAIN: Style = Style { bold: false, italic: false, strike: false, code: false, quiet: false, heading: 0 };
     const BOLD: Style = Style { bold: true, ..PLAIN };
     const ITALIC: Style = Style { italic: true, ..PLAIN };
     const STRUCK: Style = Style { strike: true, ..PLAIN };
@@ -592,6 +846,16 @@ mod tests {
         Run::Link { url: url.parse().unwrap(), label: label.to_string() }
     }
 
+    /// Lines of code that stand apart.
+    fn lines_of_code(code: &str) -> Run {
+        Run::Block(Block::Code(code.to_string()))
+    }
+
+    /// A heading of `level`, in the style it is set in.
+    fn heading(level: u8) -> Style {
+        Style { bold: true, heading: level, ..PLAIN }
+    }
+
     /// What a note that marks nothing comes out as: itself.
     fn untouched(said: &str) {
         assert_eq!(runs(said), [text(said, PLAIN)], "{said:?}");
@@ -608,8 +872,7 @@ mod tests {
         for said in [
             "2*3*4 = 24 and 5 * 3 * 7 = 105",
             "f**k this s**t",
-            "snake_case_names and _private_var here",
-            "__init__.py and __main__",
+            "snake_case_names and a_b__c__d",
             "about ~5 minutes, or ~10",
             "a footnote* and another*",
             "*unclosed and **unclosed too",
@@ -622,13 +885,26 @@ mod tests {
 
     #[test]
     fn faces_made_of_marks_stay_faces() {
-        for said in
-            ["¯\\_(ツ)_/¯", "¯_(ツ)_/¯", "^_^ and again ^_^", "(>_<) (>_<)", "o_O ... O_o", "*_* (_._) *-*", "*** !!! ***?"]
-        {
+        for said in [
+            "¯\\_(ツ)_/¯",
+            "¯_(ツ)_/¯",
+            "^_^ and again ^_^",
+            "(>_<) (>_<)",
+            "o_O ... O_o",
+            "*_* (_._) *-*",
+            "*** !!! ***?",
+            ">_< and\n>:( and\n>100 came",
+        ] {
             untouched(said);
         }
-        // A `\` before a mark keeps it from being one, and stays.
-        untouched("\\*not slanted\\* and \\`not code\\`");
+    }
+
+    #[test]
+    fn a_backslash_before_a_mark_keeps_it_from_being_one_and_goes() {
+        assert_eq!(runs("\\*not slanted\\* and \\`not code\\`"), [text("*not slanted* and `not code`", PLAIN)]);
+        assert_eq!(runs("snake\\_case and \\_private\\_"), [text("snake_case and _private_", PLAIN)]);
+        // But not the arm of a shrug, and not one before anything else.
+        untouched("¯\\_(ツ)_/¯ in C:\\Users\\me, and a \\n");
     }
 
     #[test]
@@ -653,7 +929,11 @@ mod tests {
             runs("_one_ and (_two_)"),
             [text("one", ITALIC), text(" and (", PLAIN), text("two", ITALIC), text(")", PLAIN)]
         );
-        assert_eq!(runs("***both***"), [text("both", Style { bold: true, italic: true, ..PLAIN })]);
+        let both = Style { bold: true, italic: true, ..PLAIN };
+        assert_eq!(runs("***both*** and ___both___"), [text("both", both), text(" and ", PLAIN), text("both", both)]);
+        // Two underscores are bold as two stars are: what is named so is
+        // code, and written as code.
+        assert_eq!(runs("__bold__ and `__init__`"), [text("bold", BOLD), text(" and ", PLAIN), code("__init__")]);
     }
 
     #[test]
@@ -689,14 +969,15 @@ mod tests {
     }
 
     #[test]
-    fn what_is_between_two_fences_is_code() {
+    fn what_is_between_two_fences_is_code_that_stands_apart() {
+        // No line break is left on either side of it, nor an empty line.
         assert_eq!(
-            runs("Look:\n```rust\nfn main() {\n    let *x* = 1;\n}\n```\ndone"),
-            [text("Look:\n", PLAIN), code("fn main() {\n    let *x* = 1;\n}"), text("\ndone", PLAIN)]
+            runs("Look:\n\n```rust\nfn main() {\n    let *x* = 1;\n}\n```\n\ndone"),
+            [text("Look:", PLAIN), lines_of_code("fn main() {\n    let *x* = 1;\n}"), text("done", PLAIN)]
         );
-        assert_eq!(runs("~~~\na\n~~~"), [code("a")]);
+        assert_eq!(runs("~~~\na\n~~~"), [lines_of_code("a")]);
         // A longer fence holds a shorter one.
-        assert_eq!(runs("````\n```\n````"), [code("```")]);
+        assert_eq!(runs("````\n```\n````"), [lines_of_code("```")]);
         // One that nothing closes is what was written, and what follows
         // it is read as it would be without it.
         untouched("```\nnever closed");
@@ -704,52 +985,124 @@ mod tests {
     }
 
     #[test]
-    fn a_heading_is_bold_and_a_hashtag_is_not_one() {
+    fn a_heading_is_bold_and_says_how_deep_and_a_hashtag_is_not_one() {
         assert_eq!(
             runs("## What *is* new ##\nthis"),
             [
-                text("What ", BOLD),
-                text("is", Style { bold: true, italic: true, ..PLAIN }),
-                text(" new", BOLD),
+                text("What ", heading(2)),
+                text("is", Style { italic: true, ..heading(2) }),
+                text(" new", heading(2)),
                 text("\nthis", PLAIN)
             ]
         );
-        assert_eq!(runs("# I write C#"), [text("I write C#", BOLD)]);
+        assert_eq!(runs("# I write C#"), [text("I write C#", heading(1))]);
+        assert_eq!(runs("###### six"), [text("six", heading(6))]);
         untouched("#nostr is not a heading\n####### neither are seven\n# ");
+    }
+
+    #[test]
+    fn a_line_with_equals_signs_under_it_is_a_heading() {
+        assert_eq!(runs("The title\n=========\nand so on"), [text("The title", heading(1)), text("\nand so on", PLAIN)]);
+        // Not what is something else already, and not two of them.
+        untouched("a == b\n==\nc");
+        assert_eq!(runs("> said\n===="), [text("\u{258e} said", QUIET), text("\n====", PLAIN)]);
     }
 
     #[test]
     fn what_is_quoted_is_quiet_behind_a_bar() {
         assert_eq!(
-            runs("> to be, or *not*\n> > to be\nsaid he"),
+            runs("> to be, or *not*\n> > to be\n>be me\nsaid he"),
             [
                 text("\u{258e} to be, or ", QUIET),
                 text("not", Style { italic: true, ..QUIET }),
                 text("\n", PLAIN),
                 text("\u{258e} to be", QUIET),
+                text("\n", PLAIN),
+                text("\u{258e} be me", QUIET),
                 text("\nsaid he", PLAIN),
             ]
         );
-        untouched(">be me\n-> not this either");
+        untouched("-> not this\n2 > 1");
     }
 
     #[test]
-    fn items_get_a_dot_and_other_lists_are_left() {
-        assert_eq!(runs("* one\n  * *two*"), [text("\u{2022} one\n  \u{2022} ", PLAIN), text("two", ITALIC)]);
-        untouched("- one\n- two\n+ three\n1. four\n- signed, me");
+    fn items_of_a_list_get_a_dot_and_a_dash_alone_does_not() {
+        assert_eq!(
+            runs("- one\n  * *two*\n+ three"),
+            [text("\u{2022} one\n  \u{2022} ", PLAIN), text("two", ITALIC), text("\n\u{2022} three", PLAIN)]
+        );
+        // One with no other beside it is a dash: a signature, a footnote.
+        untouched("so it goes\n\n- signed, me");
+        untouched("* terms apply\nto all of it");
+        // Numbers read as what they are, and are left.
+        untouched("1. one\n2. two\n3) three");
     }
 
     #[test]
-    fn three_marks_alone_on_a_line_are_a_rule() {
-        let rule = "\u{2500}".repeat(12);
+    fn what_is_to_do_gets_a_box_ticked_or_not() {
+        assert_eq!(runs("- [ ] write it\n- [x] ship it"), [text("\u{2610} write it\n\u{2611} ship it", PLAIN)]);
+        // Alone too: it could be nothing else.
+        assert_eq!(runs("* [X] done"), [text("\u{2611} done", PLAIN)]);
+    }
+
+    #[test]
+    fn three_marks_alone_on_a_line_are_a_rule_that_stands_apart() {
         for marks in ["---", "***", "___", "- - -", "-----"] {
             assert_eq!(
-                runs(&format!("above\n{marks}\nbelow")),
-                [text("above\n", PLAIN), text(&rule, QUIET), text("\nbelow", PLAIN)],
+                runs(&format!("above\n\n{marks}\nbelow")),
+                [text("above", PLAIN), Run::Block(Block::Rule), text("below", PLAIN)],
                 "{marks}"
             );
         }
         untouched("--\n-- \n--- not alone\n-*-");
+    }
+
+    #[test]
+    fn lines_of_cells_with_a_line_of_dashes_under_the_first_are_a_table() {
+        let cell = |said: &str| vec![text(said, PLAIN)];
+        assert_eq!(
+            runs(
+                "Dams:\n|Category|Approximate count|\n|---|---|\n|Large dams in the U.S.|92,000+|\n|Large dams worldwide|~200,000|\n\nso many"
+            ),
+            [
+                text("Dams:", PLAIN),
+                Run::Block(Block::Table(Table {
+                    columns: vec![Align::Left, Align::Left],
+                    rows: vec![
+                        vec![cell("Category"), cell("Approximate count")],
+                        vec![cell("Large dams in the U.S."), cell("92,000+")],
+                        vec![cell("Large dams worldwide"), cell("~200,000")],
+                    ],
+                })),
+                text("so many", PLAIN),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_table_says_where_its_columns_stand_and_reads_its_cells_as_text() {
+        let table = match runs("a | b | c\n:-- | :-: | --:\n**x** | `y \\| z` | [w](https://example.com)\nshort |\n1 | 2 | 3 | 4")
+            .as_slice()
+        {
+            [Run::Block(Block::Table(table))] => table.clone(),
+            other => panic!("not a table: {other:?}"),
+        };
+        assert_eq!(table.columns, [Align::Left, Align::Middle, Align::Right]);
+        assert_eq!(
+            table.rows.get(1),
+            Some(&vec![vec![text("x", BOLD)], vec![code("y | z")], vec![link("https://example.com", "w")]])
+        );
+        // A row has as many cells as there are columns, whatever it has.
+        assert_eq!(table.rows.get(2), Some(&vec![vec![text("short", PLAIN)], vec![], vec![]]));
+        assert_eq!(table.rows.get(3).map(Vec::len), Some(3));
+    }
+
+    #[test]
+    fn a_line_with_a_bar_in_it_is_not_a_table_by_itself() {
+        untouched("this | that\nand the other");
+        untouched("a | b\n--\nc");
+        untouched("| a | b |\n| --- |\n| c |");
+        untouched("yes | no\n-- maybe | so");
     }
 
     #[test]
@@ -767,6 +1120,14 @@ mod tests {
     }
 
     #[test]
+    fn an_address_between_angle_brackets_is_shown_without_them_and_a_br_is_a_line_break() {
+        assert_eq!(runs("see <https://example.com/a>, or not"), [text("see https://example.com/a, or not", PLAIN)]);
+        assert_eq!(runs("one<br>two<BR/>three"), [text("one\ntwo\nthree", PLAIN)]);
+        // Nothing else between them is taken for anything.
+        untouched("<b>not bold</b> <script>alert(1)</script> <3 a < b > c <mailto:a@b.c>");
+    }
+
+    #[test]
     fn what_is_in_a_web_address_is_not_a_mark() {
         untouched("see https://example.com/a_b_/c*d*/~~e~~ and _https://example.com/x");
         // But a mark that ends one closes what was opened before it.
@@ -776,7 +1137,12 @@ mod tests {
     #[test]
     fn line_breaks_written_as_two_characters_are_kept_where_nothing_is_marked() {
         untouched("one\r\ntwo\r\n");
-        assert_eq!(runs("# Title\r\ntext"), [text("Title", BOLD), text("\ntext", PLAIN)]);
+        assert_eq!(runs("# Title\r\ntext"), [text("Title", heading(1)), text("\ntext", PLAIN)]);
+        // And are no part of a table, a fence or a rule.
+        assert!(
+            matches!(runs("a|b\r\n-|-\r\nc|d\r\n").as_slice(), [Run::Block(Block::Table(table)), ..] if table.rows.len() == 2)
+        );
+        assert_eq!(runs("```\r\ncode\r\n```\r\n---\r"), [lines_of_code("code"), Run::Block(Block::Rule)]);
     }
 
     #[test]
@@ -785,14 +1151,24 @@ mod tests {
         // end of the note for the one that closes it: a mark that was
         // looked for once and not found is not looked for again.
         let started = std::time::Instant::now();
-        for said in
-            [" *a".repeat(40_000), " `a".repeat(40_000), "*_".repeat(60_000), "```x\n".repeat(20_000), " **a `".repeat(20_000)]
-        {
+        for said in [
+            " *a".repeat(40_000),
+            " `a".repeat(40_000),
+            "*_".repeat(60_000),
+            "```x\n".repeat(20_000),
+            " **a `".repeat(20_000),
+            "a|b\n".repeat(30_000),
+            "|a\n|-\n".repeat(20_000),
+            "|".repeat(60_000),
+            "- a\n".repeat(30_000),
+            "<a ".repeat(40_000),
+        ] {
             let _ = runs(&said);
         }
         // A link's label and address are looked for the end of so far and
         // no further, however many open.
         let _ = runs(&"[a](".repeat(4_000));
+        let _ = runs(&"<".repeat(4_000));
         assert!(started.elapsed() < std::time::Duration::from_secs(10), "{:?}", started.elapsed());
     }
 
@@ -805,6 +1181,7 @@ mod tests {
             .map(|run| match run {
                 Run::Text { text, .. } | Run::Code { text, .. } => text,
                 Run::Link { label, .. } => label,
+                Run::Block(_) => String::new(),
             })
             .collect();
         assert!(said.contains("deep") && said.contains('*'), "{said}");

@@ -38,12 +38,13 @@ use crate::messages::Message;
 use crate::nostr::bookmarks::Bookmarks;
 use crate::nostr::content::{NoteImage, Segment, link_label};
 use crate::nostr::engagement::{Did, Engagement, Left, Reaction};
-use crate::nostr::markdown::Style;
+use crate::nostr::markdown::{Align, Block, Style};
 use crate::nostr::models::{Note, Profile, display_name};
 use crate::nostr::outbox::Whereabouts;
 use crate::previews::{PreviewState, PreviewStore};
 use crate::state::{Expanded, Passing, ReactionMenu, RepostMenu, WHO_SHOWN, WhoMenu};
 use crate::video::Videos;
+use crate::views::components::table_grid::{TABLE_CELL_PADDING_X, TABLE_CELL_PADDING_Y, TABLE_LINE, TableGrid, column_widths};
 use crate::views::components::{
     MENU_GAP, MediaPlaceholder, POPUP_MAX_WIDTH, Picture, ScrollPosition, avatar, bookmark_icon, fold_icon, like_icon, link_icon,
     link_preview, link_preview_height, menu_at, quote_link, quoted_note, quoted_note_height, reaction_menu, relays_icon,
@@ -235,6 +236,32 @@ const BEHIND_CODE_ALPHA: f32 = 0.12;
 const CODE_RADIUS: f32 = 3.0;
 const CODE_PADDING: [f32; 2] = [0.0, 2.0];
 
+/// Lines of code that stand apart: the room around them, and the corners
+/// of what is behind them.
+const CODE_BLOCK_PADDING: u16 = 8;
+const CODE_BLOCK_RADIUS: f32 = 6.0;
+
+/// How much larger than the text the headings of the first three levels
+/// are. The others are as large as the text, and bold as these.
+const HEADING_SCALES: [f32; 3] = [1.5, 1.3, 1.15];
+
+/// A rule between two parts of a note: how thick, and how much of the
+/// text's colour.
+const RULE_HEIGHT: f32 = 1.0;
+const RULE_ALPHA: f32 = 0.35;
+
+/// How much of the text's colour the line under the first row of a table
+/// is, and the lines under the others.
+const TABLE_HEAD_LINE_ALPHA: f32 = 0.5;
+const TABLE_LINE_ALPHA: f32 = 0.2;
+
+/// How many letters wide someone's name is taken to be, in a cell of a
+/// table, before it is known who they are.
+const MENTION_WIDTH_CHARS: usize = 12;
+
+/// How wide a letter of code is, as a share of its size: all of them are.
+const CODE_CHAR_WIDTH_PER_SIZE: f32 = 0.6;
+
 /// The line of actions under a note: how much room each action has around
 /// it.
 const NOTE_ACTION_PADDING: [u16; 2] = [2, 6];
@@ -333,11 +360,22 @@ pub(super) fn said_height(note: &Note, sizes: RowSizes, width: f32, reading: Rea
 
     let chars_per_line = ((width / (f32::from(sizes.text()) * CHAR_WIDTH_PER_SIZE)) as usize).max(1);
     let (segments, line_chars) = note.content.text(reading == Reading::Whole);
-    let lines: usize = match segments.is_empty() {
+    // The lines of its text, of which there are none where all of it
+    // stands apart.
+    let lines: usize = match segments.iter().all(stands_apart) {
         true => 0,
         false => line_chars.iter().map(|chars| chars.div_ceil(chars_per_line).max(1)).sum(),
     };
-    let text = if lines == 0 { 0.0 } else { spacing + lines as f32 * line_height(sizes.text()) };
+    // What stands apart, and the room between the parts.
+    let apart: f32 = segments
+        .iter()
+        .filter_map(|segment| match segment {
+            Segment::Block(block) => Some(block_height(block, sizes, width)),
+            _ => None,
+        })
+        .sum();
+    let between = parts(segments).count().saturating_sub(1) as f32 * spacing;
+    let text = if segments.is_empty() { 0.0 } else { spacing + lines as f32 * line_height(sizes.text()) + apart + between };
     let fold = if note.content.whole.is_some() && reading != Reading::Quoted { spacing + fold_height(sizes) } else { 0.0 };
     let images: f32 = note
         .content
@@ -354,6 +392,49 @@ pub(super) fn said_height(note: &Note, sizes: RowSizes, width: f32, reading: Rea
         .sum();
     let preview = note.content.preview.as_ref().map_or(0.0, |_| spacing + link_preview_height(sizes));
     text + fold + images + videos + quotes + preview
+}
+
+/// How tall what stands apart from a note's text will be, near enough:
+/// lines of code wrapped at how many of its letters fit, a rule, and a
+/// table of rows a line of text tall each.
+fn block_height(block: &Block<Vec<Segment>>, sizes: RowSizes, width: f32) -> f32 {
+    let line = line_height(sizes.text());
+    match block {
+        Block::Code(code) => {
+            let around = 2.0 * f32::from(CODE_BLOCK_PADDING);
+            let per_line = (((width - around) / (f32::from(sizes.text()) * CODE_CHAR_WIDTH_PER_SIZE)) as usize).max(1);
+            let lines: usize = code.split('\n').map(|line| line.chars().count().div_ceil(per_line).max(1)).sum();
+            lines as f32 * line + around
+        }
+        Block::Rule => RULE_HEIGHT,
+        Block::Table(table) => {
+            // Each column as wide as the longest of its cells would be, or
+            // as it comes out where they don't all fit; each row as many
+            // lines as the cell of it that wraps most.
+            let letter = f32::from(sizes.text()) * CHAR_WIDTH_PER_SIZE;
+            let wide = |cell: &Vec<Segment>| {
+                cell.iter().map(|piece| piece.words(&|_| "@".repeat(MENTION_WIDTH_CHARS)).chars().count()).sum::<usize>() as f32
+                    * letter
+            };
+            let mut natural = vec![0.0_f32; table.columns.len()];
+            for row in &table.rows {
+                for (widest, cell) in natural.iter_mut().zip(row) {
+                    *widest = widest.max(wide(cell));
+                }
+            }
+            let room = (width - 2.0 * TABLE_CELL_PADDING_X * natural.len() as f32).max(0.0);
+            let widths = column_widths(&natural, room);
+            let lines: f32 = table
+                .rows
+                .iter()
+                .map(|row| {
+                    row.iter().zip(&widths).map(|(cell, width)| (wide(cell) / width.max(1.0)).ceil().max(1.0)).fold(1.0, f32::max)
+                })
+                .sum();
+            let rows = table.rows.len() as f32;
+            lines * line + rows * 2.0 * TABLE_CELL_PADDING_Y + (rows - 1.0).max(0.0) * TABLE_LINE
+        }
+    }
 }
 
 /// How tall a note's row will be, near enough, before it has been laid out,
@@ -431,7 +512,7 @@ impl NoteLink {
         match segment {
             Segment::Link { url, .. } => Some(Self::Web(url.clone())),
             Segment::Mention(public_key) => Some(Self::Profile(*public_key)),
-            Segment::Text(_) | Segment::Styled { .. } | Segment::Hashtag(_) | Segment::Reference(_) => None,
+            Segment::Text(_) | Segment::Styled { .. } | Segment::Hashtag(_) | Segment::Reference(_) | Segment::Block(_) => None,
         }
     }
 
@@ -452,6 +533,8 @@ struct Faces {
     code: Font,
     quiet: Color,
     behind_code: Color,
+    /// The colour of the text itself: what lines are drawn in, thinned.
+    on_background: Color,
 }
 
 impl Faces {
@@ -465,11 +548,12 @@ impl Faces {
             code: cosmic::font::mono(),
             quiet: Color { a: QUIET_TEXT_ALPHA, ..on_background },
             behind_code: Color { a: BEHIND_CODE_ALPHA, ..on_background },
+            on_background,
         }
     }
 
-    /// `text` as a span set in `style`.
-    fn styled<'a>(&self, text: &'a str, style: Style) -> Span<'a, NoteLink> {
+    /// `text` as a span set in `style`, in text of `size`.
+    fn styled<'a>(&self, text: &'a str, style: Style, size: u16) -> Span<'a, NoteLink> {
         let mut font = if style.code { self.code } else { self.text };
         if style.bold {
             font.weight = Weight::Bold;
@@ -478,6 +562,12 @@ impl Faces {
             font.style = FontStyle::Italic;
         }
         let shown = span(text).font(font).strikethrough(style.strike).color_maybe(style.quiet.then_some(self.quiet));
+        // A heading is larger, and its line as much taller.
+        let larger = style.heading.checked_sub(1).and_then(|level| HEADING_SCALES.get(usize::from(level)));
+        let shown = match larger {
+            Some(scale) => shown.size(f32::from(size) * scale),
+            None => shown,
+        };
         if style.code {
             shown.background(self.behind_code).border(border::rounded(CODE_RADIUS)).padding(CODE_PADDING)
         } else {
@@ -486,31 +576,125 @@ impl Faces {
     }
 }
 
-/// What a note says, the text `segments` of it, as rich text: links and
-/// mentions can be clicked, and they and hashtags are set in `accent`;
-/// what the note marks is set as it marks it.
-fn note_text<'a>(segments: &'a [Segment], context: &RowContext<'a>) -> Element<'a, Message> {
+/// Whether `segment` stands apart from the text.
+fn stands_apart(segment: &Segment) -> bool {
+    matches!(segment, Segment::Block(_))
+}
+
+/// The parts what a note says is shown in, one under the other: each
+/// stretch of its text, and each thing that stands apart from it.
+fn parts(segments: &[Segment]) -> impl Iterator<Item = &[Segment]> {
+    segments.chunk_by(|one, next| !stands_apart(one) && !stands_apart(next))
+}
+
+/// The pieces `segments` of a note's text, as spans: links and mentions
+/// can be clicked, and they and hashtags are set in `accent`; what the
+/// note marks is set as it marks it. `stressed`, all of it is bold: what
+/// says what the columns of a table are.
+fn spans<'a>(
+    segments: &'a [Segment],
+    context: &RowContext<'a>,
+    faces: &LazyCell<Faces>,
+    stressed: bool,
+) -> Vec<Span<'a, NoteLink>> {
     let RowContext { profiles, accent, sizes, .. } = *context;
-    let faces = LazyCell::new(Faces::of_the_theme);
-    let spans: Vec<Span<'a, NoteLink>> = segments
+    let bold = Style { bold: true, ..Style::default() };
+    segments
         .iter()
         .map(|segment| {
             let shown = match segment {
+                Segment::Text(text) if stressed => faces.styled(text, bold, sizes.text()),
                 Segment::Text(text) => span(text.as_str()),
-                Segment::Styled { text, style } => faces.styled(text, *style),
+                Segment::Styled { text, style } => {
+                    faces.styled(text, Style { bold: style.bold || stressed, ..*style }, sizes.text())
+                }
                 Segment::Link { label, .. } => span(label.as_str()).color(accent).underline(true),
                 Segment::Mention(public_key) => span(format!("@{}", display_name(profiles, public_key))).color(accent),
                 Segment::Hashtag(tag) => span(format!("#{tag}")).color(accent),
                 Segment::Reference(reference) => span(reference.as_str()).color(accent),
+                // What stands apart is no part of a line of text.
+                Segment::Block(_) => span(""),
             };
             match NoteLink::of(segment) {
                 Some(link) => shown.link(link),
                 None => shown,
             }
         })
-        .collect();
+        .collect()
+}
 
-    rich_text(spans).size(sizes.text()).wrapping(Wrapping::WordOrGlyph).width(Length::Fill).on_link_click(NoteLink::follow).into()
+/// `spans` as text of the note's size, `width` wide.
+fn rich<'a>(spans: Vec<Span<'a, NoteLink>>, sizes: RowSizes, width: Length) -> Element<'a, Message> {
+    rich_text(spans).size(sizes.text()).wrapping(Wrapping::WordOrGlyph).width(width).on_link_click(NoteLink::follow).into()
+}
+
+/// What stands apart from a note's text: lines of code, on what stands
+/// behind code, from one edge to the other; a rule; a table.
+fn block<'a>(block: &'a Block<Vec<Segment>>, context: &RowContext<'a>, faces: &LazyCell<Faces>) -> Element<'a, Message> {
+    let sizes = context.sizes;
+    match block {
+        Block::Code(code) => {
+            let behind = faces.behind_code;
+            container(text(code.as_str()).size(sizes.text()).font(faces.code).wrapping(Wrapping::WordOrGlyph))
+                .padding(CODE_BLOCK_PADDING)
+                .width(Length::Fill)
+                .class(cosmic::theme::Container::custom(move |_| container::Style {
+                    background: Some(Background::Color(behind)),
+                    border: border::rounded(CODE_BLOCK_RADIUS),
+                    ..container::Style::default()
+                }))
+                .into()
+        }
+        Block::Rule => {
+            let line = faces.on_background;
+            container(widget::Space::new().width(Length::Fill).height(RULE_HEIGHT))
+                .class(cosmic::theme::Container::custom(move |_| container::Style {
+                    background: Some(Background::Color(Color { a: RULE_ALPHA, ..line })),
+                    ..container::Style::default()
+                }))
+                .into()
+        }
+        Block::Table(table) => {
+            let columns = table
+                .columns
+                .iter()
+                .map(|align| match align {
+                    Align::Left => Alignment::Start,
+                    Align::Middle => Alignment::Center,
+                    Align::Right => Alignment::End,
+                })
+                .collect();
+            let cells = table
+                .rows
+                .iter()
+                .enumerate()
+                .flat_map(|(row, cells)| cells.iter().map(move |cell| (row == 0, cell)))
+                .map(|(head, cell)| rich(spans(cell, context, faces, head), sizes, Length::Shrink))
+                .collect();
+            let line = faces.on_background;
+            TableGrid::new(columns, cells, Color { a: TABLE_HEAD_LINE_ALPHA, ..line }, Color { a: TABLE_LINE_ALPHA, ..line })
+                .into()
+        }
+    }
+}
+
+/// What a note says, the `segments` of it: its text as rich text, and
+/// what stands apart from the text between the stretches of it, one
+/// under the other.
+fn note_text<'a>(segments: &'a [Segment], context: &RowContext<'a>) -> Element<'a, Message> {
+    let sizes = context.sizes;
+    let faces = LazyCell::<Faces>::new(Faces::of_the_theme);
+    if !segments.iter().any(stands_apart) {
+        return rich(spans(segments, context, &faces, false), sizes, Length::Fill);
+    }
+    let mut column = widget::Column::new().spacing(NOTE_SPACING).width(Length::Fill);
+    for part in parts(segments) {
+        column = column.push(match part {
+            [Segment::Block(apart)] => block(apart, context, &faces),
+            text => rich(spans(text, context, &faces, false), sizes, Length::Fill),
+        });
+    }
+    column.into()
 }
 
 /// The button under the text of the long note `id`: it shows the rest of
@@ -2392,6 +2576,12 @@ mod tests {
              > notes and other stuff\n* a feed\n* threads\n---\n```\nfn main() {\n    println!(\"gm\");\n}\n```"
                 .to_string(),
             "**bold words all the way along the line and round to the next one, twice over** ".repeat(3),
+            // A table, alone and among text, and one with a cell that wraps.
+            "|Category|Approximate count|\n|---|---|\n|Large dams in the U.S.|92,000+|\n|Large dams worldwide|~200,000|"
+                .to_string(),
+            "# Keys\nThese are they:\n\n| Key | What it does |\n|:--|:--|\n| `j` | The next note |\n| `k` | The one before |\n\n\
+             - [x] and a list\n- [ ] after it"
+                .to_string(),
             // Long enough to be cut, several times over, in lines and in
             // paragraphs.
             "the quick brown fox jumps over the lazy dog ".repeat(60),
@@ -2431,6 +2621,16 @@ mod tests {
             }
         }
     }
+    #[test]
+    fn a_link_in_a_cell_of_a_table_can_be_clicked() {
+        let table = note("| Where |\n|---|\n| https://example.com/a |");
+        let came = pressed_down(&table, None, mouse::Button::Left, 40.0);
+        assert!(
+            came.iter().any(|message| matches!(message, Message::OpenUrl(url) if url == "https://example.com/a")),
+            "{came:?}"
+        );
+    }
+
     #[test]
     fn what_stands_behind_code_takes_no_room() {
         // Code is set in letters of another width, so a line of it may
