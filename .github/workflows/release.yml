@@ -31,6 +31,18 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # The packages are named after the version in Cargo.toml, the release
+      # after the tag: a tag that says another version is a mistake, caught
+      # before anything is built.
+      - name: Check the tag against the crate's version
+        if: github.ref_type == 'tag'
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::the tag is $GITHUB_REF_NAME, and Cargo.toml says $version"
+            exit 1
+          fi
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
