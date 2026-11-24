@@ -278,6 +278,27 @@ site out=(cargo-target-dir / 'site'):
         | python3 site/downloads.py "{{ out }}/index.html"
     echo "Site assembled in {{ out }}"
 
+# Assemble the website, serve it on this machine and open it in the
+# browser, with the scene on (`just site-open ''` opens it as a visitor
+# gets it: the scene only where it would run well). Ctrl+C stops serving.
+site-open query='?mode=hifi' port='8000': site
+    #!/usr/bin/env python3
+    import functools, http.server, subprocess, sys
+
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory="{{ cargo-target-dir / 'site' }}")
+    try:
+        # Bound before the browser is sent there, so it finds it listening.
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", {{ port }}), handler)
+    except OSError as error:
+        sys.exit(f"could not serve on port {{ port }} ({error.strerror}): try `just site-open '{{ query }}' 8001`")
+    url = "http://127.0.0.1:{{ port }}/{{ query }}"
+    print(f"Serving {url} (Ctrl+C stops)")
+    subprocess.run(["xdg-open", url], check=False)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+
 # Make the website scene's props again (site/assets/models, site/assets/tex),
 # all of them or those named: SolidCraft shapes them, TextureCraft surfaces
 # them, glTF Transform packs them. See site/craft/README.md.
