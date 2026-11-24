@@ -214,7 +214,8 @@ impl AppModel {
     /// Whether the keys are a list's now: the popup is open, and no menu
     /// is open over what it shows.
     fn keys_are_the_lists(&self) -> bool {
-        let over_the_list = self.menu_open || self.repost_menu.is_some() || self.reaction_menu.is_some();
+        let over_the_list =
+            self.menu_open || self.repost_menu.is_some() || self.reaction_menu.is_some() || self.who_menu.is_some();
         self.popup.is_some() && !over_the_list
     }
 

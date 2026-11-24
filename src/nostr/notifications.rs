@@ -41,7 +41,7 @@ use nostr_sdk::prelude::{Event, EventId, Filter, Kind, PublicKey, Timestamp};
 
 use crate::helpers::truncate_chars;
 use crate::nostr::content::Segment;
-use crate::nostr::engagement::Reaction;
+use crate::nostr::engagement::{Reaction, zap_request};
 use crate::nostr::models::Note;
 use crate::nostr::zap::invoice_millisats;
 
@@ -169,14 +169,6 @@ pub fn filter(account: PublicKey, since: Option<u64>, until: Option<u64>, limit:
         filter = filter.until(Timestamp::from_secs(until));
     }
     filter
-}
-
-/// The zap request a zap receipt carries, if it carries one that is what
-/// it says: signed by whoever it says paid.
-fn zap_request(receipt: &Event) -> Option<Event> {
-    let description = receipt.tags.iter().find(|tag| tag.kind() == "description")?.content()?;
-    let request = Event::from_json(description).ok()?;
-    (request.kind == Kind::ZapRequest && request.verify().is_ok()).then_some(request)
 }
 
 /// The note `event` is about, which says what it tells of: the note a

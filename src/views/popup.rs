@@ -71,6 +71,7 @@ impl AppModel {
             accent: cosmic::theme::active().cosmic().accent_text_color().into(),
             can_publish: self.can_publish(),
             repost_menu: self.repost_menu,
+            who: self.who_menu.as_ref(),
             reacting: Reacting { menu: self.reaction_menu.as_ref(), suggested: &self.reaction_suggestions },
             expanded,
             marked,

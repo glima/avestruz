@@ -224,6 +224,7 @@ impl cosmic::Application for AppModel {
             pending_marks: HashSet::new(),
             repost_menu: None,
             reaction_menu: None,
+            who_menu: None,
             reaction_suggestions,
             share_copied: None,
             picture_copied: None,
@@ -714,6 +715,12 @@ impl AppModel {
                 Task::none()
             }
             Message::Repost(id) => self.handle_mark(id, Mark::Repost),
+            Message::ShowWho(note, what) => self.handle_show_who(note, what),
+            Message::WhoLoaded { note, what, result } => self.handle_who_loaded(note, what, result),
+            Message::CloseWho => {
+                self.who_menu = None;
+                Task::none()
+            }
             Message::Marked { note, mark, result } => {
                 self.handle_marked(note, mark, result);
                 Task::none()

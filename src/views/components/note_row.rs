@@ -24,6 +24,7 @@ use cosmic::iced::widget::Stack;
 use cosmic::iced::widget::text::{Shaping, Span, Wrapping};
 use cosmic::iced::widget::{rich_text, span, svg};
 use cosmic::iced::{Alignment, Background, Border, Color, Length, Point, mouse};
+use cosmic::widget::menu::menu_button;
 use cosmic::widget::popover::{Position, popover};
 use cosmic::widget::{self, button, container, icon, text};
 use nostr_sdk::prelude::{EventId, PublicKey, RelayUrl};
@@ -34,11 +35,11 @@ use crate::images::{ImageShape, ImageState, ImageStore};
 use crate::messages::Message;
 use crate::nostr::bookmarks::Bookmarks;
 use crate::nostr::content::{NoteImage, Segment, link_label};
-use crate::nostr::engagement::{Engagement, Reaction};
+use crate::nostr::engagement::{Did, Engagement, Left, Reaction};
 use crate::nostr::models::{Note, Profile, display_name};
 use crate::nostr::outbox::Whereabouts;
 use crate::previews::{PreviewState, PreviewStore};
-use crate::state::{Expanded, Passing, ReactionMenu, RepostMenu};
+use crate::state::{Expanded, Passing, ReactionMenu, RepostMenu, WHO_SHOWN, WhoMenu};
 use crate::video::Videos;
 use crate::views::components::{
     MENU_GAP, MediaPlaceholder, POPUP_MAX_WIDTH, Picture, ScrollPosition, avatar, bookmark_icon, fold_icon, like_icon, link_icon,
@@ -170,6 +171,8 @@ pub struct RowContext<'a> {
     pub can_publish: bool,
     /// The repost menu that is open, if one is.
     pub repost_menu: Option<RepostMenu>,
+    /// Who left something on a note, if that is on show.
+    pub who: Option<&'a WhoMenu>,
     /// What there is to react with, and whether it is on offer.
     pub reacting: Reacting<'a>,
     /// The long notes whose rows show all they say.
@@ -194,7 +197,11 @@ impl RowContext<'_> {
     /// Whether a menu is open over the list: a row's own, or the one
     /// behind the cog. A click beside it is to put it away, and no more.
     pub(super) fn under_a_menu(&self) -> bool {
-        self.repost_menu.is_some() || self.reacting.menu.is_some() || self.menu_open || self.videos.speed_menu()
+        self.repost_menu.is_some()
+            || self.who.is_some()
+            || self.reacting.menu.is_some()
+            || self.menu_open
+            || self.videos.speed_menu()
     }
 }
 
@@ -565,6 +572,117 @@ fn repost_menu<'a>(id: EventId, reposted: bool, at: Option<Passing>) -> Element<
     )
 }
 
+/// How wide the list of who left something on a note is, how tall one of
+/// them is in it, and how tall the list is at the most: more of them are
+/// scrolled to.
+const WHO_WIDTH: f32 = 240.0;
+const WHO_ROW_HEIGHT: f32 = 30.0;
+const WHO_MAX_HEIGHT: f32 = 8.0 * WHO_ROW_HEIGHT;
+
+/// How wide the picture of one of them is.
+const WHO_AVATAR_SIZE: f32 = 20.0;
+
+/// What one of those who left something on a note left, at the right end
+/// of their line: the emoji they reacted with, or a heart; how much they
+/// zapped; and nothing for a repost, which is all the list says.
+fn who_did<'a>(did: &Did, context: &RowContext<'a>) -> Option<Element<'a, Message>> {
+    let small = context.sizes.action_text();
+    match did {
+        Did::Reposted => None,
+        Did::Reacted(Reaction::Emoji(emoji)) => Some(text(emoji.clone()).size(small).shaping(Shaping::Advanced).into()),
+        Did::Reacted(Reaction::Like) => {
+            let accent = context.accent;
+            let heart = icon::icon(like_icon(true))
+                .size(small)
+                .class(cosmic::theme::Svg::custom(move |_theme| svg::Style { color: Some(accent) }));
+            Some(heart.into())
+        }
+        Did::Zapped(sats) => Some(text(fl!("who-sats", sats = compact_count(*sats))).size(small).wrapping(Wrapping::None).into()),
+    }
+}
+
+/// Who left something on a note, under the count of them: what the list
+/// is of, and each of them on a line, with their picture, their name and
+/// what they left. A press on one opens their profile. Until the store
+/// has been read it says so, and if nobody did, that.
+fn who_menu<'a>(menu: &'a WhoMenu, context: &RowContext<'a>) -> Element<'a, Message> {
+    let title = match menu.what {
+        Left::Reposts => fl!("who-reposted"),
+        Left::Reactions => fl!("who-reacted"),
+        Left::Zaps => fl!("who-zapped"),
+    };
+    let note = |said: String| -> Element<'a, Message> {
+        container(text(said).size(12).wrapping(Wrapping::WordOrGlyph)).padding([4, 8]).width(Length::Fill).into()
+    };
+    let body: Element<'a, Message> = match &menu.people {
+        None => note(fl!("who-reading")),
+        Some(people) if people.is_empty() => note(fl!("who-nobody")),
+        Some(people) => {
+            let mut lines = people.iter().take(WHO_SHOWN).fold(widget::Column::new(), |lines, doer| {
+                let (name, picture) = match &doer.who {
+                    Some(who) => (
+                        display_name(context.profiles, who),
+                        Some(avatar(
+                            context.images,
+                            context.profiles.get(who).and_then(|profile| profile.picture.as_deref()),
+                            who,
+                            "",
+                            WHO_AVATAR_SIZE,
+                        )),
+                    ),
+                    None => (fl!("who-unsaid").into(), None),
+                };
+                let picture = picture.unwrap_or_else(|| widget::Space::new().width(Length::Fixed(WHO_AVATAR_SIZE)).into());
+                let mut line = vec![
+                    picture,
+                    widget::Space::new().width(8).into(),
+                    container(text(name).size(13).wrapping(Wrapping::None)).width(Length::Fill).clip(true).into(),
+                ];
+                line.extend(who_did(&doer.did, context));
+                let line = menu_button(line).height(Length::Fixed(WHO_ROW_HEIGHT)).padding([2, 8]);
+                lines.push(line.on_press_maybe(doer.who.map(Message::OpenProfile)))
+            });
+            let more = people.len().saturating_sub(WHO_SHOWN);
+            if more > 0 {
+                lines = lines.push(note(fl!("who-more", count = more)));
+            }
+            container(widget::scrollable(lines)).max_height(WHO_MAX_HEIGHT).into()
+        }
+    };
+    let title = container(text(title).size(12).font(cosmic::font::bold()).wrapping(Wrapping::None)).padding([4, 8]);
+    container(widget::Column::new().push(title).push(body))
+        .padding(4)
+        .width(Length::Fixed(WHO_WIDTH))
+        .class(cosmic::theme::Container::Dropdown)
+        .into()
+}
+
+/// `action`, one of a note's actions that counts what others left on it,
+/// with who they were under it for whoever asks: a click on it with the
+/// right button shows them, and one anywhere else puts them away. `own`
+/// is what the action itself opens under it, if it opens something and
+/// that is open, and what closing it says.
+fn counted<'a>(
+    action: Element<'a, Message>,
+    note: &Note,
+    what: Left,
+    context: &RowContext<'a>,
+    own: Option<(Option<Element<'a, Message>>, Message)>,
+) -> Element<'a, Message> {
+    // Under the action, from its left edge; over it, where the popup has
+    // no room left under.
+    let under = Point::new(0.0, action_height(context.sizes) + MENU_GAP);
+    let action = widget::mouse_area(action).on_right_press(Message::ShowWho(note.id, what));
+    let who = context.who.filter(|menu| menu.note == note.id && menu.what == what);
+    let (own, own_closes) = own.map_or((None, Message::CloseWho), |(open, closes)| (open, closes));
+    let action = popover(action).position(Position::Point(under));
+    match (who, own) {
+        (Some(who), _) => action.on_close(Message::CloseWho).popup(who_menu(who, context)).into(),
+        (None, Some(own)) => action.on_close(own_closes).popup(own).into(),
+        (None, None) => action.on_close(own_closes).into(),
+    }
+}
+
 /// The reaction action of `note`: a heart, with how many reacted. Pressed,
 /// it offers what to react with under it (see
 /// [`reaction_menu`](mod@crate::views::components::reaction_menu)), over
@@ -588,12 +706,9 @@ fn reaction_action<'a>(note: &Note, engagement: &Engagement, context: &RowContex
         None => action_button(like_icon(false), count, dim, fl!("note-react"), react, sizes),
     };
 
-    let under = Point::new(0.0, action_height(sizes) + MENU_GAP);
-    let mut action = popover(action).position(Position::Point(under)).on_close(Message::CloseReactionMenu);
-    if let Some(menu) = context.reacting.menu.filter(|menu| menu.note == note.id) {
-        action = action.popup(reaction_menu(menu, context.reacting.suggested));
-    }
-    action.into()
+    let menu = context.reacting.menu.filter(|menu| menu.note == note.id);
+    let menu = menu.map(|menu| reaction_menu(menu, context.reacting.suggested));
+    counted(action, note, Left::Reactions, context, Some((menu, Message::CloseReactionMenu)))
 }
 
 /// What a relay is called: its address without the scheme, which is the
@@ -686,13 +801,10 @@ fn note_actions<'a>(note: &Note, context: &RowContext<'a>) -> Element<'a, Messag
         can(Message::ToggleRepostMenu(note.id)),
         sizes,
     );
-    // The menu opens under the action, from its left edge; over it, where
-    // the popup has no room left under.
-    let under = Point::new(0.0, action_height(sizes) + MENU_GAP);
-    let mut repost = popover(repost).position(Position::Point(under)).on_close(Message::CloseRepostMenu);
-    if let Some(menu) = context.repost_menu.filter(|menu| menu.note == note.id) {
-        repost = repost.popup(repost_menu(note.id, engagement.reposted, menu.at));
-    }
+    // Its menu opens under it, and so does who reposted.
+    let menu = context.repost_menu.filter(|menu| menu.note == note.id);
+    let menu = menu.map(|menu| repost_menu(note.id, engagement.reposted, menu.at));
+    let repost = counted(repost, note, Left::Reposts, context, Some((menu, Message::CloseRepostMenu)));
 
     let can_be_zapped = context.profiles.get(&note.author).is_some_and(|profile| profile.lightning.is_some());
     widget::Row::new()
@@ -706,13 +818,19 @@ fn note_actions<'a>(note: &Note, context: &RowContext<'a>) -> Element<'a, Messag
         )))
         .push(action_cell(repost))
         .push(action_cell(reaction_action(note, &engagement, context, dim)))
-        .push(action_cell(action_button(
-            zap_icon(),
-            engagement.zap_sats,
-            dim,
-            if can_be_zapped { fl!("note-zap") } else { fl!("note-zap-unavailable") },
-            can_be_zapped.then_some(Message::ZapNote(note.id)),
-            sizes,
+        .push(action_cell(counted(
+            action_button(
+                zap_icon(),
+                engagement.zap_sats,
+                dim,
+                if can_be_zapped { fl!("note-zap") } else { fl!("note-zap-unavailable") },
+                can_be_zapped.then_some(Message::ZapNote(note.id)),
+                sizes,
+            ),
+            note,
+            Left::Zaps,
+            context,
+            None,
         )))
         .push(widget::Space::new().width(Length::Fill))
         .push(share_action(note, context, dim))
@@ -849,11 +967,11 @@ mod tests {
     use crate::messages::Message;
     use crate::nostr::bookmarks::Bookmarks;
     use crate::nostr::content::{self, FEED_NOTE_MAX_CHARS};
-    use crate::nostr::engagement::{Engagement, Reaction};
+    use crate::nostr::engagement::{Did, Doer, Engagement, Left, Reaction};
     use crate::nostr::models::Note;
     use crate::nostr::outbox::Whereabouts;
     use crate::previews::{LinkPreview, Linked, PreviewStore};
-    use crate::state::{EmojiPicker, Expanded, ReactionMenu, RepostMenu};
+    use crate::state::{EmojiPicker, Expanded, ReactionMenu, RepostMenu, WhoMenu};
     use crate::video::{Playback, Videos};
     use crate::views::components::{LIST_MAX_WIDTH, link_preview_height, shown_size, video_height};
     use cosmic::iced::core::widget::Tree;
@@ -983,6 +1101,7 @@ mod tests {
             accent: Color::WHITE,
             can_publish: true,
             repost_menu: None,
+            who: None,
             reacting: Reacting::NONE,
             expanded,
             marked: None,
@@ -1084,6 +1203,7 @@ mod tests {
             accent: Color::WHITE,
             can_publish: true,
             repost_menu: menu_open.then_some(RepostMenu::of(note.id)),
+            who: None,
             reacting: Reacting::NONE,
             expanded: &expanded,
             marked: None,
@@ -1322,6 +1442,7 @@ mod tests {
             accent: Color::WHITE,
             can_publish: true,
             repost_menu: None,
+            who: None,
             reacting: Reacting::NONE,
             expanded: &expanded,
             marked: None,
@@ -1459,6 +1580,104 @@ mod tests {
         assert_eq!(height(&found, &other), waiting);
     }
 
+    /// What comes of pressing `button` at each of a column of points `x`
+    /// across the row of `note`, top to bottom, with `who` on show.
+    fn pressed_down(note: &Note, who: Option<&WhoMenu>, button: mouse::Button, x: f32) -> Vec<Message> {
+        let (profiles, images, previews) = (HashMap::new(), no_images(), no_previews());
+        let (engagement, seen_on) = (HashMap::new(), HashMap::new());
+        let (videos, expanded) = (Videos::default(), Expanded::default());
+        let context = RowContext {
+            profiles: &profiles,
+            images: &images,
+            previews: &previews,
+            videos: &videos,
+            engagement: &engagement,
+            seen_on: &seen_on,
+            now: 0,
+            accent: Color::WHITE,
+            can_publish: true,
+            repost_menu: None,
+            who,
+            reacting: Reacting::NONE,
+            expanded: &expanded,
+            marked: None,
+            share_copied: None,
+            picture_copied: None,
+            bookmarking: Bookmarking::Unavailable,
+            menu_open: false,
+            sizes: RowSizes::new(SIZE),
+        };
+        let mut renderer = crate::views::components::testing::renderer();
+        let row = opening_thread(note_row(note, &context), note.id, &context);
+        let mut interface = UserInterface::build(row, Size::new(WIDTH, 300.0), Cache::new(), &mut renderer);
+        let mut messages = Vec::new();
+        for y in (0..300).step_by(4) {
+            let point = Point::new(x, y as f32);
+            for event in [
+                mouse::Event::CursorMoved { position: point },
+                mouse::Event::ButtonPressed(button),
+                mouse::Event::ButtonReleased(button),
+            ] {
+                let _ = interface.update(
+                    &[Event::Mouse(event)],
+                    mouse::Cursor::Available(point),
+                    &mut renderer,
+                    &mut clipboard::Null,
+                    &mut messages,
+                );
+            }
+        }
+        messages
+    }
+
+    #[test]
+    fn a_right_click_on_a_count_asks_who_they_were_and_they_are_listed_under_it() {
+        let said = note("worth a look");
+        // The actions stand in a line, each in as much room as the next:
+        // answering, reposting, reacting, zapping.
+        let across = |place: f32| place * NOTE_ACTION_WIDTH + 12.0;
+        let asked = |place: f32| -> Vec<Left> {
+            let mut asked: Vec<Left> = pressed_down(&said, None, mouse::Button::Right, across(place))
+                .into_iter()
+                .map(|message| match message {
+                    Message::ShowWho(note, what) if note == said.id => what,
+                    other => panic!("nothing a right click here asks for: {other:?}"),
+                })
+                .collect();
+            asked.dedup();
+            asked
+        };
+        assert_eq!(asked(0.0), [], "who answered is what the thread shows");
+        assert_eq!(asked(1.0), [Left::Reposts]);
+        assert_eq!(asked(2.0), [Left::Reactions]);
+        assert_eq!(asked(3.0), [Left::Zaps]);
+
+        // Listed under the count: a press on one of them opens who they
+        // are, one on whoever does not say opens nothing, and one
+        // anywhere else puts the list away.
+        let someone = Keys::generate().public_key();
+        let people = vec![Doer { who: Some(someone), did: Did::Zapped(21) }, Doer { who: None, did: Did::Zapped(5) }];
+        let listed = WhoMenu { note: said.id, what: Left::Zaps, people: Some(people) };
+        let came = pressed_down(&said, Some(&listed), mouse::Button::Left, across(3.0) + 40.0);
+        let opened: Vec<_> = came
+            .iter()
+            .filter_map(|message| match message {
+                Message::OpenProfile(who) => Some(who),
+                _ => None,
+            })
+            .collect();
+        assert!(!opened.is_empty() && opened.iter().all(|who| **who == someone), "{came:?}");
+        assert!(came.iter().any(|message| matches!(message, Message::CloseWho)), "{came:?}");
+
+        // Until they have been read, and when there are none, it says so
+        // and has nobody to press.
+        for people in [None, Some(Vec::new())] {
+            let empty = WhoMenu { note: said.id, what: Left::Zaps, people };
+            let came = pressed_down(&said, Some(&empty), mouse::Button::Left, across(3.0) + 40.0);
+            assert!(!came.iter().any(|message| matches!(message, Message::OpenProfile(_))), "{came:?}");
+        }
+    }
+
     #[test]
     fn the_repost_action_opens_a_menu_that_reposts_or_quotes() {
         let said = note("worth passing on");
@@ -1537,6 +1756,7 @@ mod tests {
                 accent: Color::WHITE,
                 can_publish: true,
                 repost_menu: None,
+                who: None,
                 reacting: Reacting::NONE,
                 expanded: &expanded,
                 marked: None,
@@ -1592,6 +1812,7 @@ mod tests {
             accent: Color::WHITE,
             can_publish: true,
             repost_menu: None,
+            who: None,
             reacting: Reacting::NONE,
             expanded: &expanded,
             marked: None,
@@ -1788,6 +2009,7 @@ mod tests {
                 accent: Color::WHITE,
                 can_publish: true,
                 repost_menu: None,
+                who: None,
                 reacting: Reacting::NONE,
                 expanded: &expanded,
                 marked: None,
@@ -1842,6 +2064,7 @@ mod tests {
             accent: Color::WHITE,
             can_publish: true,
             repost_menu: None,
+            who: None,
             reacting: Reacting { menu, suggested: &suggested },
             expanded: &expanded,
             marked: None,
@@ -1917,6 +2140,7 @@ mod tests {
                 accent: Color::WHITE,
                 can_publish: true,
                 repost_menu: menu_open.then_some(RepostMenu::of(said.id)),
+                who: None,
                 reacting: Reacting::NONE,
                 expanded: &expanded,
                 marked: None,
@@ -1975,6 +2199,7 @@ mod tests {
             accent: Color::WHITE,
             can_publish: true,
             repost_menu: None,
+            who: None,
             reacting: Reacting::NONE,
             expanded: &expanded,
             marked: None,
@@ -2053,6 +2278,7 @@ mod tests {
                 accent: Color::WHITE,
                 can_publish: true,
                 repost_menu: None,
+                who: None,
                 reacting: Reacting::NONE,
                 expanded: &expanded,
                 marked: None,
@@ -2168,6 +2394,7 @@ mod tests {
             accent: Color::WHITE,
             can_publish: true,
             repost_menu: None,
+            who: None,
             reacting: Reacting::NONE,
             expanded: &expanded,
             marked: None,
@@ -2245,6 +2472,7 @@ mod tests {
             accent: Color::WHITE,
             can_publish: true,
             repost_menu: None,
+            who: None,
             reacting: Reacting::NONE,
             expanded: &expanded,
             marked: None,

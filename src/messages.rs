@@ -45,7 +45,7 @@ use crate::nostr::blossom::{Attachment, UploadError};
 use crate::nostr::bookmarks::Bookmarks;
 use crate::nostr::client::{FetchError, FollowError, ListError, NostrService, Notified, PublishError, RelayUse, Source};
 use crate::nostr::compose::Target;
-use crate::nostr::engagement::{Mark, Reaction, Standing};
+use crate::nostr::engagement::{Doer, Left, Mark, Reaction, Standing};
 use crate::nostr::feed::FeedPage;
 use crate::nostr::models::{Note, Profile};
 use crate::nostr::outbox::Whereabouts;
@@ -364,6 +364,12 @@ pub enum Message {
     CloseRepostMenu,
     /// Repost this note
     Repost(EventId),
+    /// Show who left this on this note, under the count of them, or put that away if it shows
+    ShowWho(EventId, Left),
+    /// Who left this on this note was read from the store, or could not be
+    WhoLoaded { note: EventId, what: Left, result: Result<Vec<Doer>, FetchError> },
+    /// Put away who left something on a note
+    CloseWho,
     /// The account's like or repost of this note went out, or didn't
     Marked { note: EventId, mark: Mark, result: Result<(), PublishFailure> },
 

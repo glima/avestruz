@@ -104,6 +104,7 @@ impl AppModel {
                 (&["Backspace"], fl!("keys-leave-composer")),
                 (&["Esc"], fl!("keys-escape")),
                 (&[right_click.as_str()], fl!("keys-copy-picture")),
+                (&[right_click.as_str()], fl!("keys-who")),
             ],
         );
         let body = widget::Column::new()

@@ -303,6 +303,15 @@ Early. What works today:
   sats it was zapped, counted from what the relays send and kept in the
   event store. With full access, the speech bubble opens a reply and the
   heart offers what to react with (see **Reacting**).
+- **Who they were** — a click with the right button on a note's reposts,
+  its reactions or its zaps lists who they were under it: who reposted it,
+  the last first; who reacted and with what; who zapped it and how many
+  sats in all, the most first. A click on one of them opens their profile;
+  a click anywhere else, or Escape, puts the list away. It is read from
+  the event store, as the counts are, so who is listed is who was counted.
+  Who zapped is who the zap request inside the receipt was signed by
+  (NIP-57): a zap whose request is missing or does not hold is listed as
+  someone who does not say. A hundred are shown at the most.
 - **Reacting** — the heart under a note opens a row: a like, the emoji you
   react with most, and a way to all the others (NIP-25). That way opens
   every emoji there is, by group, with a field to find one by what it is

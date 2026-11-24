@@ -9,6 +9,10 @@
 //! receipts (kind 9735, NIP-57). The count is of what the event store
 //! holds, which is what the relays were willing to send: for a note that
 //! went everywhere, less than everything.
+//!
+//! Who they were is read from the same events ([`who_did`]): who
+//! reposted, who reacted and what with, who zapped and how much. So what
+//! a count names and who is listed under it agree.
 
 use std::collections::{HashMap, HashSet};
 
@@ -148,6 +152,110 @@ fn zap(event: &Event) -> Option<(EventId, u64)> {
     Some((event.tags.event_ids().next()?, invoice_millisats(invoice)?))
 }
 
+/// The zap request a zap receipt carries, if it carries one that is what
+/// it says: signed by whoever it says paid.
+pub(crate) fn zap_request(receipt: &Event) -> Option<Event> {
+    let description = receipt.tags.iter().find(|tag| tag.kind() == "description")?.content()?;
+    let request = Event::from_json(description).ok()?;
+    (request.kind == Kind::ZapRequest && request.verify().is_ok()).then_some(request)
+}
+
+/// Which of what others left on a note: what one of its counts is of.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Left {
+    /// The reposts.
+    Reposts,
+    /// The reactions: likes, and emoji.
+    Reactions,
+    /// The zaps.
+    Zaps,
+}
+
+impl Left {
+    /// The kinds of the events that are it.
+    pub fn kinds(self) -> &'static [Kind] {
+        match self {
+            Self::Reposts => &[Kind::Repost, Kind::GenericRepost],
+            Self::Reactions => &[Kind::Reaction],
+            Self::Zaps => &[Kind::ZapReceipt],
+        }
+    }
+}
+
+/// What one of them left on a note.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Did {
+    /// Reposted it.
+    Reposted,
+    /// Reacted to it, with this.
+    Reacted(Reaction),
+    /// Zapped it, so many sats in all.
+    Zapped(u64),
+}
+
+/// Someone who left something on a note, and what.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Doer {
+    /// Who. `None` for the zaps whose receipts don't say who paid, or say
+    /// it in a way that does not hold: all of those are one.
+    pub who: Option<PublicKey>,
+    pub did: Did,
+}
+
+/// Who left `what` on `note`, going by `events`, each of them once: the
+/// last first, for reposts and reactions, and whoever zapped most first.
+/// Someone who reposted twice reposted once; of someone who reacted more
+/// than once, it is the reaction made last; and what someone zapped in
+/// several goes is added up. A downvote is no reaction, here as in the
+/// count, and a zap of less than a sat is none.
+///
+/// A zap is whose its receipt says it is, by the request the receipt
+/// carries, if that request is signed by them (NIP-57). Whether the
+/// receipt itself comes from the wallet of the one zapped is not looked
+/// into, as it is not for the count (see [`tally`]).
+pub fn who_did(events: impl IntoIterator<Item = Event>, note: EventId, what: Left) -> Vec<Doer> {
+    // Each of them, with when they last did it, or how much in all.
+    let mut by: HashMap<Option<PublicKey>, (u64, Did)> = HashMap::new();
+    for event in events.into_iter().filter(|event| what.kinds().contains(&event.kind)) {
+        let at = event.created_at.as_secs();
+        match what {
+            Left::Reposts if event.tags.event_ids().next() == Some(note) => {
+                let last = by.entry(Some(event.pubkey)).or_insert((at, Did::Reposted));
+                last.0 = last.0.max(at);
+            }
+            Left::Reactions if reaction_target(&event) == Some(note) => {
+                let last = by.entry(Some(event.pubkey)).or_insert((at, Did::Reacted(Reaction::said(&event.content))));
+                if at >= last.0 {
+                    *last = (at, Did::Reacted(Reaction::said(&event.content)));
+                }
+            }
+            Left::Zaps => {
+                let Some((_, millisats)) = zap(&event).filter(|(zapped, _)| *zapped == note) else {
+                    continue;
+                };
+                let who = zap_request(&event).map(|request| request.pubkey);
+                let paid = by.entry(who).or_insert((0, Did::Zapped(0)));
+                paid.0 = paid.0.saturating_add(millisats);
+            }
+            _ => {}
+        }
+    }
+    let mut doers: Vec<(Option<PublicKey>, u64, Did)> = by
+        .into_iter()
+        .map(|(who, (weight, did))| match did {
+            Did::Zapped(_) => (who, weight, Did::Zapped(weight / 1000)),
+            did => (who, weight, did),
+        })
+        .filter(|(_, _, did)| *did != Did::Zapped(0))
+        .collect();
+    // The most first; among equals, whoever is known before whoever is
+    // not, and always in the same order.
+    doers.sort_by(|(one, weight, _), (other, heavier, _)| {
+        heavier.cmp(weight).then_with(|| one.is_none().cmp(&other.is_none())).then_with(|| one.cmp(other))
+    });
+    doers.into_iter().map(|(who, _, did)| Doer { who, did }).collect()
+}
+
 /// What `events` make of each of `notes`, with `account` the one whose own
 /// reactions and reposts are told apart. Events about other notes, or of
 /// other kinds, count for nothing; someone who reacted twice reacted once,
@@ -241,8 +349,8 @@ pub fn repost(event: &Event, relay: Option<RelayUrl>) -> EventBuilder {
 
 #[cfg(test)]
 mod tests {
-    use super::{Engagement, Mark, Reaction, react, repost, tally};
-    use nostr_sdk::prelude::{Event, EventBuilder, EventId, FinalizeEvent, Keys, Kind, RelayUrl, Tag};
+    use super::{Did, Doer, Engagement, Left, Mark, Reaction, react, repost, tally, who_did};
+    use nostr_sdk::prelude::{Event, EventBuilder, EventId, FinalizeEvent, Keys, Kind, RelayUrl, Tag, Timestamp};
     use std::collections::HashSet;
 
     fn id(byte: u8) -> EventId {
@@ -263,6 +371,92 @@ mod tests {
 
     fn receipt(note: EventId, invoice: &str) -> Event {
         event(Kind::ZapReceipt, "", vec![Tag::event(note), Tag::custom("bolt11", [invoice])], &Keys::generate())
+    }
+
+    /// As [`event`], made at `at`.
+    fn event_at(at: u64, kind: Kind, content: &str, tags: Vec<Tag>, keys: &Keys) -> Event {
+        EventBuilder::new(kind, content).tags(tags).custom_created_at(Timestamp::from_secs(at)).finalize(keys).unwrap()
+    }
+
+    /// A receipt for `note` of what `invoice` asks for, which says that
+    /// `payer` paid it, in a request signed by them.
+    fn receipt_from(payer: &Keys, note: EventId, invoice: &str) -> Event {
+        let request = event(Kind::ZapRequest, "", vec![Tag::event(note)], payer);
+        let tags = vec![Tag::event(note), Tag::custom("bolt11", [invoice]), Tag::custom("description", [request.as_json()])];
+        event(Kind::ZapReceipt, "", tags, &Keys::generate())
+    }
+
+    #[test]
+    fn who_reposted_a_note_is_each_of_them_once_the_last_first() {
+        let (first, second) = (Keys::generate(), Keys::generate());
+        let (note, another) = (id(1), id(2));
+        let events = vec![
+            event_at(10, Kind::Repost, "", vec![Tag::event(note)], &first),
+            event_at(20, Kind::GenericRepost, "", vec![Tag::event(note)], &second),
+            // Again, later: once is what counts, and where it puts them.
+            event_at(30, Kind::Repost, "", vec![Tag::event(note)], &first),
+            // Of another note, and of another kind: not this.
+            event_at(40, Kind::Repost, "", vec![Tag::event(another)], &second),
+            event_at(50, Kind::Reaction, "+", vec![Tag::event(note)], &second),
+        ];
+        let reposted = |who: &Keys| Doer { who: Some(who.public_key()), did: Did::Reposted };
+        assert_eq!(who_did(events.clone(), note, Left::Reposts), [reposted(&first), reposted(&second)]);
+        assert_eq!(who_did(events, id(9), Left::Reposts), []);
+    }
+
+    #[test]
+    fn who_reacted_to_a_note_is_each_of_them_with_what_they_reacted_with_last() {
+        let (first, second, third) = (Keys::generate(), Keys::generate(), Keys::generate());
+        let (note, another) = (id(1), id(2));
+        let events = vec![
+            event_at(10, Kind::Reaction, "+", vec![Tag::event(note)], &first),
+            event_at(20, Kind::Reaction, "\u{1f525}", vec![Tag::event(note)], &first),
+            event_at(30, Kind::Reaction, "+", vec![Tag::event(note)], &second),
+            // A downvote is no reaction, and one to a note it names last is
+            // to that note, not to this one.
+            event_at(40, Kind::Reaction, "-", vec![Tag::event(note)], &third),
+            event_at(50, Kind::Reaction, "+", vec![Tag::event(note), Tag::event(another)], &third),
+        ];
+        let reacted = |who: &Keys, with: Reaction| Doer { who: Some(who.public_key()), did: Did::Reacted(with) };
+        assert_eq!(
+            who_did(events, note, Left::Reactions),
+            [reacted(&second, Reaction::Like), reacted(&first, Reaction::Emoji("\u{1f525}".into()))]
+        );
+    }
+
+    #[test]
+    fn who_zapped_a_note_is_each_of_them_with_all_they_paid_the_most_first() {
+        let (generous, modest) = (Keys::generate(), Keys::generate());
+        let (note, another) = (id(1), id(2));
+        // A request that says who paid, altered after it was signed: it
+        // does not hold, and the zap is nobody's in particular.
+        let forged = {
+            let request = event(Kind::ZapRequest, "", vec![Tag::event(note)], &generous);
+            let mut altered: serde_json::Value = serde_json::from_str(&request.as_json()).unwrap();
+            altered["content"] = "said after signing".into();
+            let tags = vec![
+                Tag::event(note),
+                Tag::custom("bolt11", ["lnbc10u1pjq9xyz"]),
+                Tag::custom("description", [altered.to_string()]),
+            ];
+            event(Kind::ZapReceipt, "", tags, &Keys::generate())
+        };
+        let events = vec![
+            receipt_from(&modest, note, "lnbc210n1pjq9xyz"),
+            receipt_from(&generous, note, "lnbc10u1pjq9xyz"),
+            receipt_from(&generous, note, "lnbc210n1pjq9xyz"),
+            // Receipts that say nobody paid, or say it falsely: one line.
+            receipt(note, "lnbc210n1pjq9xyz"),
+            forged,
+            // No amount, and another note's: not counted here.
+            receipt_from(&modest, note, "lnbc1pjq9xyz"),
+            receipt_from(&modest, another, "lnbc10u1pjq9xyz"),
+        ];
+        let zapped = |who: Option<&Keys>, sats: u64| Doer { who: who.map(Keys::public_key), did: Did::Zapped(sats) };
+        assert_eq!(
+            who_did(events, note, Left::Zaps),
+            [zapped(Some(&generous), 1_021), zapped(None, 1_021), zapped(Some(&modest), 21)]
+        );
     }
 
     #[test]

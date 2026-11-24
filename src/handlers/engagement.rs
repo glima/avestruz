@@ -28,11 +28,12 @@ use nostr_sdk::prelude::{EventId, PublicKey};
 use crate::emoji::{self, Group};
 use crate::fl;
 use crate::handlers::compose::publish_error_text;
+use crate::handlers::feed::fetch_profiles;
 use crate::helpers::unix_now;
 use crate::messages::{Message, PublishFailure};
 use crate::nostr::client::{FetchError, Source};
-use crate::nostr::engagement::{self, Mark, Reaction, Standing};
-use crate::state::{AppModel, EmojiPicker, REACTIONS_OFFERED, ReactionMenu, RepostMenu};
+use crate::nostr::engagement::{self, Doer, Left, Mark, Reaction, Standing};
+use crate::state::{AppModel, EmojiPicker, REACTIONS_OFFERED, ReactionMenu, RepostMenu, WHO_SHOWN, WhoMenu};
 use crate::views::components::emoji_search_id;
 
 /// How long what was made of a note is taken as known, before it is asked
@@ -79,6 +80,7 @@ impl AppModel {
         self.pending_marks.clear();
         self.repost_menu = None;
         self.reaction_menu = None;
+        self.who_menu = None;
     }
 
     /// What was made of some notes came from the store or from the relays
@@ -105,10 +107,55 @@ impl AppModel {
         }
     }
 
+    /// Show who left `what` on the note `id`, under the count of them, or
+    /// put that away if it is what shows. They are read from the store,
+    /// which is where they were counted from.
+    pub fn handle_show_who(&mut self, id: EventId, what: Left) -> Task<cosmic::Action<Message>> {
+        self.repost_menu = None;
+        self.reaction_menu = None;
+        if self.who_menu.take().is_some_and(|menu| menu.note == id && menu.what == what) {
+            return Task::none();
+        }
+        let Some(service) = self.nostr.clone() else {
+            return Task::none();
+        };
+        self.who_menu = Some(WhoMenu { note: id, what, people: None });
+        Task::perform(async move { service.who_did(id, what).await }, move |result| {
+            cosmic::Action::App(Message::WhoLoaded { note: id, what, result })
+        })
+    }
+
+    /// Who left `what` on `note` was read, or could not be, which shows
+    /// as nobody having. Nothing comes of it if that is no longer what is
+    /// asked for. Those of them who are not known yet are asked after, as
+    /// many as are shown.
+    pub fn handle_who_loaded(
+        &mut self,
+        note: EventId,
+        what: Left,
+        result: Result<Vec<Doer>, FetchError>,
+    ) -> Task<cosmic::Action<Message>> {
+        let Some(menu) = self.who_menu.as_mut().filter(|menu| menu.note == note && menu.what == what) else {
+            return Task::none();
+        };
+        let people = result.unwrap_or_else(|e| {
+            tracing::warn!("who left something on a note could not be read: {e:?}");
+            Vec::new()
+        });
+        let unknown: Vec<PublicKey> =
+            people.iter().take(WHO_SHOWN).filter_map(|doer| doer.who).filter(|who| !self.profiles.contains_key(who)).collect();
+        menu.people = Some(people);
+        match self.nostr.clone() {
+            Some(service) if !unknown.is_empty() => fetch_profiles(service, unknown),
+            _ => Task::none(),
+        }
+    }
+
     /// Show what can be done to pass the note `id` on, or put it away if
     /// it is showing.
     pub fn handle_toggle_repost_menu(&mut self, id: EventId) {
         self.reaction_menu = None;
+        self.who_menu = None;
         let showing = self.repost_menu.is_some_and(|menu| menu.note == id);
         self.repost_menu = (!showing).then_some(RepostMenu::of(id));
     }
@@ -127,6 +174,7 @@ impl AppModel {
     /// if it is showing.
     pub fn handle_toggle_reaction_menu(&mut self, id: EventId) {
         self.repost_menu = None;
+        self.who_menu = None;
         let showing = self.reaction_menu.as_ref().is_some_and(|menu| menu.note == id);
         self.reaction_menu = (!showing).then_some(ReactionMenu { note: id, picker: None });
     }

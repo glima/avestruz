@@ -83,7 +83,7 @@ use crate::nostr::bookmarks::{self, Bookmarks, PrivateTags};
 use crate::nostr::compose::Target;
 use crate::nostr::contacts;
 use crate::nostr::content::QUOTE_DEPTH;
-use crate::nostr::engagement::{self, Standing};
+use crate::nostr::engagement::{self, Doer, Left, Standing};
 use crate::nostr::feed;
 use crate::nostr::kept_drafts::{self, DRAFT_KIND};
 use crate::nostr::models::{Note, Profile, reply_to};
@@ -1245,6 +1245,15 @@ impl NostrService {
         }
         let seen_on = self.seen_on(&notes);
         Ok(Standing { engagement: engagement::tally(events, &notes.into_iter().collect(), account), seen_on })
+    }
+
+    /// Who left `what` on `note`, as far as the store holds: the same
+    /// events its count is of (see [`Self::standing`]), so that who is
+    /// listed is who was counted.
+    pub async fn who_did(&self, note: EventId, what: Left) -> Result<Vec<Doer>, FetchError> {
+        let filter = Filter::new().kinds(what.kinds().iter().copied()).event(note).limit(ENGAGEMENT_STORE_LIMIT);
+        let events = self.events(Source::Store, vec![filter]).await?;
+        Ok(engagement::who_did(events, note, what))
     }
 
     /// Listen on the connected relays for the receipts of `note` until one

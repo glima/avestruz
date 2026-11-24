@@ -67,6 +67,17 @@ emoji-search-nothing = No emoji is called that.
 note-show-more = Show more
 note-show-less = Show less
 note-zap = Zap (z)
+who-reposted = Reposted by
+who-reacted = Reactions
+who-zapped = Zapped by
+who-reading = Looking…
+who-nobody = Nobody, as far as is known here
+who-unsaid = Someone who does not say
+who-sats = { $sats } sats
+who-more = { $count ->
+        [one] and 1 more
+       *[other] and { $count } more
+    }
 note-zap-unavailable = No Lightning address to zap
 note-seen-on = { $count ->
         [one] Seen on 1 relay
@@ -146,6 +157,7 @@ keys-publish = Publish what is being written
 keys-leave-composer = Leave what is being written: at once if nothing is, and after asking whether to keep it as a draft if something is. In the text it rubs out first
 keys-escape = Put a menu away, or close Avestruz
 keys-copy-picture = On a picture: copy it
+keys-who = On a note's count of reposts, of reactions or of zaps: who they were
 keys-right-click = Right click
 keys-description = The keys work on any list of notes, and are the text's where something is being typed. To open Avestruz with a key from anywhere, bind one to “cosmic-applet-avestruz --toggle” in the desktop's Settings, under Keyboard, Shortcuts, Custom shortcuts.
 picture-copied = Copied

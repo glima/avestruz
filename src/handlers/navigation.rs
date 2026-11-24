@@ -319,7 +319,8 @@ impl AppModel {
     /// over the list, if one is; the popup itself otherwise, as a click
     /// outside it would, with everything in it kept as it is.
     pub fn handle_escape(&mut self) -> Task<cosmic::Action<Message>> {
-        if self.repost_menu.is_some() || self.reaction_menu.is_some() || self.menu_open || self.videos.speed_menu() {
+        let who = self.who_menu.take().is_some();
+        if who || self.repost_menu.is_some() || self.reaction_menu.is_some() || self.menu_open || self.videos.speed_menu() {
             self.repost_menu = None;
             self.reaction_menu = None;
             self.menu_open = false;
@@ -352,6 +353,7 @@ impl AppModel {
     fn popup_left(&mut self) -> Task<cosmic::Action<Message>> {
         self.repost_menu = None;
         self.reaction_menu = None;
+        self.who_menu = None;
         self.menu_open = false;
         self.share_copied = None;
         self.picture_copied = None;
@@ -418,6 +420,9 @@ impl AppModel {
         }
         self.pages.push(page);
         self.view_state = ViewState::Page;
+        // One of those who left something on a note may have been pressed
+        // to get here: the list of them is not there to come back to.
+        self.who_menu = None;
         scroll_list_to(0.0)
     }
 

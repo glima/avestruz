@@ -56,7 +56,7 @@ use crate::nostr::blossom::{self, Sent};
 use crate::nostr::bookmarks::Bookmarks;
 use crate::nostr::client::{NostrService, RelayUse};
 use crate::nostr::compose::Target;
-use crate::nostr::engagement::{Engagement, Mark};
+use crate::nostr::engagement::{Doer, Engagement, Left, Mark};
 use crate::nostr::feed::{Feed, Pending};
 use crate::nostr::models::{Note, Profile};
 use crate::nostr::notifications::Notifications;
@@ -750,6 +750,22 @@ impl RepostMenu {
     }
 }
 
+/// How many of those who left something on a note are shown, at the
+/// most: more than anyone reads through, and few enough to ask after.
+pub const WHO_SHOWN: usize = 100;
+
+/// Who left something on a note, on show under the count of them: who
+/// reposted it, who reacted to it, or who zapped it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WhoMenu {
+    /// The note it is for.
+    pub note: EventId,
+    /// Which of its counts.
+    pub what: Left,
+    /// Who they are, once the store has been read.
+    pub people: Option<Vec<Doer>>,
+}
+
 /// What to react to a note with, on offer under its like: the emoji used
 /// most, or, once more were asked for, all there are.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -959,6 +975,8 @@ pub struct AppModel {
     pub repost_menu: Option<RepostMenu>,
     /// What to react with is on offer, for one note.
     pub reaction_menu: Option<ReactionMenu>,
+    /// Who left something on a note is on show, for one of its counts.
+    pub who_menu: Option<WhoMenu>,
     /// The emoji offered first to react with: the ones used most (see
     /// [`crate::emoji::suggested`]), as the settings have them now.
     pub reaction_suggestions: Vec<String>,

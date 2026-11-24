@@ -180,6 +180,7 @@ mod tests {
             accent: Color::WHITE,
             can_publish: true,
             repost_menu: None,
+            who: None,
             reacting: Reacting::NONE,
             expanded: &expanded,
             marked: None,
