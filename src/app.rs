@@ -324,6 +324,13 @@ impl cosmic::Application for AppModel {
             // text being typed takes them for itself. What they do is in
             // `handlers::keys`.
             cosmic::iced::event::listen_with(|event, status, _window| match event {
+                // A picture of the popup, wherever the keyboard is in it:
+                // no text takes Ctrl+Shift+S for itself.
+                cosmic::iced::Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, repeat: false, .. })
+                    if modifiers.control() && modifiers.shift() && matches!(key.as_ref(), Key::Character("s" | "S")) =>
+                {
+                    Some(Message::TakeScreenshot)
+                }
                 cosmic::iced::Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, repeat, .. })
                     if status == Status::Ignored && !modifiers.command() && !modifiers.alt() && !modifiers.logo() =>
                 {
@@ -376,6 +383,7 @@ impl cosmic::Application for AppModel {
     /// - `handlers::previews` - Asking the pages notes link to what they say of themselves
     /// - `handlers::video` - Playing a video, and finding what there is to play of a YouTube one
     /// - `handlers::share` - Copying a link to a note that anyone can open
+    /// - `handlers::screenshot` - Taking a picture of the popup, from the popup
     /// - `handlers::settings` - The settings: how large notes are set, how long they are kept, how much is logged
     /// - `handlers::store` - Having the event store let go of what is old
     /// - `handlers::notifications` - What others did that concerns the account
@@ -719,6 +727,11 @@ impl AppModel {
             Message::WhoLoaded { note, what, result } => self.handle_who_loaded(note, what, result),
             Message::CloseWho => {
                 self.who_menu = None;
+                Task::none()
+            }
+            Message::TakeScreenshot => self.handle_take_screenshot(),
+            Message::ScreenshotTaken(taken) => {
+                self.handle_screenshot_taken(taken);
                 Task::none()
             }
             Message::Marked { note, mark, result } => {

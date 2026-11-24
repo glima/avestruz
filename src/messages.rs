@@ -31,6 +31,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::path::PathBuf;
 
+use cosmic::iced::core::window::Screenshot;
 use cosmic::iced::window::Id;
 use cosmic::widget::{segmented_button, text_editor};
 use nostr_sdk::prelude::{Event, EventId, PublicKey, RelayUrl, Tag, Url};
@@ -370,6 +371,10 @@ pub enum Message {
     WhoLoaded { note: EventId, what: Left, result: Result<Vec<Doer>, FetchError> },
     /// Put away who left something on a note
     CloseWho,
+    /// Ctrl+Shift+S: take a picture of the popup
+    TakeScreenshot,
+    /// The renderer handed over what it drew of the popup, to be written to a file
+    ScreenshotTaken(Screenshot),
     /// The account's like or repost of this note went out, or didn't
     Marked { note: EventId, mark: Mark, result: Result<(), PublishFailure> },
 

@@ -33,6 +33,7 @@
 //! | [`previews`] | Asking the web pages notes link to what they say of themselves |
 //! | [`profile`] | Opening someone's profile, and following them |
 //! | [`relays`] | The account's relays: reading its lists, changing them, and saving them |
+//! | [`screenshot`] | Taking a picture of the popup, from the popup, and writing it to the pictures folder |
 //! | [`search`] | Searching for people and notes, and opening what is typed by its address |
 //! | [`settings`] | Changing settings, and taking changes made elsewhere |
 //! | [`share`] | Copying a link to a note that anyone can open |
@@ -57,6 +58,7 @@ pub mod notifications;
 pub mod previews;
 pub mod profile;
 pub mod relays;
+pub mod screenshot;
 pub mod search;
 pub mod settings;
 pub mod share;

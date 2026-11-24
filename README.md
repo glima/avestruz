@@ -71,6 +71,7 @@ Early. What works today:
   | `B` | Show the bookmarks |
   | `.` | Show the notes that wait, as the button over the list does |
   | `?` | Show what the keys do |
+  | Ctrl+Shift+S | Save a picture of the popup, as it shows, to your pictures folder (`avestruz-<date>_<time>.png`) |
 
   The note the keyboard is at has a line around it. A list keeps its
   mark: back from a thread, the note it was opened from is marked
@@ -701,7 +702,7 @@ between runs, and changes at once. `RUST_LOG`, when set, has the say instead
 src/
 ├── nostr/          # Relay client and LMDB event store, the account and its key, feed, thread, contact list, bookmarks, the account's relay lists, search, media servers (Blossom), the relay it runs itself, drafts, what the store lets go of, composing, engagement, which relays a note was seen on, zaps, NIP-05 names, note content and models
 ├── guide/          # Documentation only: architecture, flows, relays, protocol, decisions, testing
-├── handlers/       # Message handlers: auth, feed, thread, profile, compose, engagement, bookmarks, relays, media (media servers, attaching), search, zap, images, previews, video, share, navigation, settings, store
+├── handlers/       # Message handlers: auth, feed, thread, profile, compose, engagement, bookmarks, relays, media (media servers, attaching), search, zap, images, previews, video, share, screenshot, navigation, settings, store
 ├── views/          # UI views
 │   ├── components/ # Reusable components: VirtualList (what the lists scroll in), the scroller and its place, note row, quoted note, link preview, video box, avatar, QR code, media placeholder, icons
 │   └── *.rs        # Popup, login, feed, thread, profile, compose, zap, settings, what the keys do

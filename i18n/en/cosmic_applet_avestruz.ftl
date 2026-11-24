@@ -156,6 +156,7 @@ keys-help = Show this list
 keys-publish = Publish what is being written
 keys-leave-composer = Leave what is being written: at once if nothing is, and after asking whether to keep it as a draft if something is. In the text it rubs out first
 keys-escape = Put a menu away, or close Avestruz
+keys-screenshot = Save a picture of Avestruz to your pictures folder
 keys-copy-picture = On a picture: copy it
 keys-who = On a note's count of reposts, of reactions or of zaps: who they were
 keys-right-click = Right click

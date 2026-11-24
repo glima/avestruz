@@ -103,6 +103,7 @@ impl AppModel {
                 (&["Ctrl+Enter"], fl!("keys-publish")),
                 (&["Backspace"], fl!("keys-leave-composer")),
                 (&["Esc"], fl!("keys-escape")),
+                (&["Ctrl+Shift+S"], fl!("keys-screenshot")),
                 (&[right_click.as_str()], fl!("keys-copy-picture")),
                 (&[right_click.as_str()], fl!("keys-who")),
             ],
