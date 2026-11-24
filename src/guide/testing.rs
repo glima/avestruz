@@ -140,6 +140,7 @@
 //! | `cargo clippy`, warnings denied | Nothing in `src/` that can panic, no dead code, no wildcard imports (see [`crate::guide::decisions`]) |
 //! | `cargo test --no-run` | That the tests compile, which clippy, run without them, doesn't see |
 //! | `cargo machete` | No dependency that isn't used |
+//! | `cog check` | That every commit since the last release is a Conventional Commit, of a type the release notes have a section for (`cog.toml`, `cliff.toml`, `CONTRIBUTING.md`) |
 //! | `just doc` | That the documentation builds, with no link that leads nowhere |
 //! | `just mermaid-check` | That every diagram in it parses |
 //! | `cargo deny` | No dependency under a licence the project can't take |

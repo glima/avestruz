@@ -569,7 +569,7 @@ Once installed, add **Avestruz** to the panel from COSMIC Settings → Desktop �
 Panel → Applets.
 
 ```sh
-just check          # formatting, clippy, unused dependencies, licences, security advisories
+just check          # formatting, clippy, unused dependencies, commit messages, licences, security advisories
 just test           # unit tests
 just coverage       # HTML and LCOV coverage reports, via cargo-llvm-cov
 just coverage-summary  # coverage as a table in the terminal
@@ -580,6 +580,9 @@ just doc            # build the docs, private items included, diagrams drawn
 just doc-open       # build the docs and open them in the browser
 just mermaid-check  # parse the diagrams in the docs (needs Node.js, see below)
 ```
+
+What a change has to pass, and how its commit is written, is in
+[CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ### Documentation
 

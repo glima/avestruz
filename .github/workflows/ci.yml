@@ -20,6 +20,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the commit-message check needs history and tags
 
       # What the crates link against (D-Bus for the keyring, xkbcommon and
       # Wayland for the window, GStreamer for videos), and the GStreamer
@@ -54,6 +56,21 @@ jobs:
 
       - name: Install cargo-deny
         uses: taiki-e/install-action@e7755904d936cb033d6d742aa409597c6a104079 # cargo-deny
+
+      # cocogitto has no install-action entry, and cocogitto-action's
+      # `install-only` input exists only on its unreleased main. So: the
+      # published binary, checksum-pinned, leaving `just check` as the single
+      # place the gate is defined.
+      - name: Install cocogitto
+        run: |
+          set -euo pipefail
+          ver=7.0.0
+          url="https://github.com/cocogitto/cocogitto/releases/download/${ver}/cocogitto-${ver}-x86_64-unknown-linux-musl.tar.gz"
+          curl -sSfL "$url" -o /tmp/cog.tgz
+          echo "e03938ff2c4c86d71c00c0f3284dbbe95c5ca76fe34a51f33e945c23010d59bb  /tmp/cog.tgz" | sha256sum -c -
+          tar xzf /tmp/cog.tgz -C /tmp
+          install -Dm755 /tmp/x86_64-unknown-linux-musl/cog "$HOME/.local/bin/cog"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       # The same goes for the check that parses the diagrams in the docs: it
       # is skipped where its packages are not installed. Node.js itself is on

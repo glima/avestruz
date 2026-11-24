@@ -27,7 +27,7 @@ build-debug *args:
 # Compiles with release profile
 build-release *args: (build-debug '--release' args)
 
-# Runs a formatting check, clippy check, unused dependency check, licence check, and security audit
+# Runs a formatting check, clippy check, unused dependency check, commit-message check, licence check, and security audit
 check *args:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -44,6 +44,21 @@ check *args:
         cargo machete || exit 1
     else
         echo "cargo-machete not found, skipping unused dependency check (install with: cargo install cargo-machete)"
+    fi
+    echo "Checking commit messages..."
+    if command -v cog >/dev/null 2>&1; then
+        # Conventional Commits, from the last tag forward. Types beyond the
+        # defaults are declared in cog.toml, and each one has a section in
+        # cliff.toml, so a subject that passes here cannot fall out of the
+        # release notes. Until there is a tag, cog has nowhere to start
+        # from and says so as an error: the whole history is checked.
+        if [ -n "$(git tag --list 'v[0-9]*')" ]; then
+            cog check --from-latest-tag || exit 1
+        else
+            cog check || exit 1
+        fi
+    else
+        echo "cocogitto not found, skipping commit-message check (install with: cargo install cocogitto)"
     fi
     echo "Checking that the documentation builds..."
     just doc
