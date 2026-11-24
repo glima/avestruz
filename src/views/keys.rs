@@ -82,6 +82,7 @@ impl AppModel {
                 (&["h", "Backspace"], fl!("keys-go-back")),
                 (&["."], fl!("keys-new")),
                 (&["B"], fl!("keys-bookmarks")),
+                (&["s"], fl!("keys-search")),
                 (&["?"], fl!("keys-help")),
             ],
         );

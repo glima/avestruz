@@ -387,6 +387,7 @@ impl cosmic::Application for AppModel {
                         Key::Character("z") => Some(Message::ZapMarked),
                         Key::Character("b") => Some(Message::BookmarkMarked),
                         Key::Character("B") => Some(Message::GoToBookmarks),
+                        Key::Character("s") => Some(Message::GoToSearch),
                         Key::Character("?") => Some(Message::ShowKeys),
                         _ => None,
                     }
@@ -463,6 +464,7 @@ impl AppModel {
             Message::ZapMarked => self.handle_zap_marked(),
             Message::BookmarkMarked => self.handle_bookmark_marked(),
             Message::GoToBookmarks => self.handle_go_to_bookmarks(),
+            Message::GoToSearch => self.handle_go_to_search(),
             Message::ShowKeys => self.handle_show_keys(),
             Message::ShowWaiting => self.handle_show_waiting(),
             Message::GoBack => self.handle_go_back(),

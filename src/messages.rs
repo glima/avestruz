@@ -122,6 +122,8 @@ pub enum Message {
     BookmarkMarked,
     /// `B` was pressed there: show the bookmarks
     GoToBookmarks,
+    /// `s` was pressed there: show a page to search on
+    GoToSearch,
     /// `?` was pressed there: show what the keys do
     ShowKeys,
     /// `.` was pressed there: show the notes that wait for the list on show

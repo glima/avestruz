@@ -73,6 +73,7 @@ Early. What works today:
   | `z` | Zap the marked note |
   | `b` | Bookmark the marked note, or take its bookmark off |
   | `B` | Show the bookmarks |
+  | `s` | Search: a page to search on, with the keyboard where the search is typed |
   | `.` | Show the notes that wait, as the button over the list does |
   | `?` | Show what the keys do |
   | Ctrl+P | In the composer: what is being written as it will show, and back to writing it |

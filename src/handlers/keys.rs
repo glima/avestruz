@@ -18,6 +18,7 @@
 //! | `z` | Zap the marked note, as the bolt under it does |
 //! | `b` | Bookmark the marked note, or take its bookmark off, as the ribbon under it does |
 //! | `B` | Show the bookmarks, over the list on show |
+//! | `s` | Show a page to search on, with the keyboard where the search is typed; on one already, only that |
 //! | `.` | Show the notes that wait, as the button over the list does |
 //! | `?` | Show what the keys do: a view of its own, which the menu above the feed opens too |
 //!
@@ -76,6 +77,7 @@ use crate::nostr::thread::ThreadRow;
 use crate::previews::PreviewState;
 use crate::state::{AppModel, Expanded, FeedState, Page, Passing, RepostMenu, Step, ViewState};
 use crate::views::components::{RowHeights, RowSizes, estimated_note_height, estimated_notification_height};
+use crate::views::search::search_input_id;
 use crate::views::thread::estimated_row_height;
 
 /// How near, in points, the top of a row may be to the top of what is in
@@ -505,6 +507,20 @@ impl AppModel {
             return Task::none();
         }
         self.handle_open_bookmarks()
+    }
+
+    /// `s` was pressed: show a page to search on, as the magnifying glass
+    /// above the feed does, with the keyboard in the place to type in.
+    /// Over one already, the keyboard is put there and no other is
+    /// opened.
+    pub fn handle_go_to_search(&mut self) -> Task<cosmic::Action<Message>> {
+        if !self.keys_go_elsewhere() {
+            return Task::none();
+        }
+        match self.pages.last() {
+            Some(Page::Search(_)) if self.view_state == ViewState::Page => cosmic::widget::text_input::focus(search_input_id()),
+            _ => self.handle_open_search(),
+        }
     }
 
     /// `?` was pressed: show what the keys do, in the view that says so.

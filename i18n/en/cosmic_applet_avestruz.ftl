@@ -151,6 +151,7 @@ keys-repost = Repost or quote the marked note: the arrows up and down choose whi
 keys-zap = Zap the marked note
 keys-bookmark = Bookmark the marked note, or take its bookmark off
 keys-bookmarks = Show your bookmarks
+keys-search = Search
 keys-new = Show the new notes that wait
 keys-help = Show this list
 keys-publish = Publish what is being written
