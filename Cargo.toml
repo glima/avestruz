@@ -25,7 +25,7 @@ nostr-sdk = { version = "0.45.6", features = ["local-relay"] }
 # The WebSocket that relay is spoken to over, on this end of the pipe to
 # it. The version `nostr-sdk` builds with, without what a pipe has no use
 # for: the handshake, the connecting, the TLS.
-tokio-tungstenite = { version = "0.28", default-features = false }
+tokio-tungstenite = { version = "0.30", default-features = false }
 
 # Signing with a remote signer (NIP-46): an account signed in with a
 # `bunker://` address keeps its key there, and asks for each signature.
