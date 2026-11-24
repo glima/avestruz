@@ -4,6 +4,13 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      # The parts of one action, used together in a job: CodeQL refuses to
+      # run with `init` and `analyze` at different versions, so they move
+      # in one pull request or not at all.
+      codeql-action:
+        patterns:
+          - "github/codeql-action/*"
 
   # Main crate. libcosmic, a git dependency, is held at the revision it was
   # built and tried against and moved by hand (`cargo update -p libcosmic`):
