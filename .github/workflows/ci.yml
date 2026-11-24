@@ -17,6 +17,9 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # prove to Codecov which repository the upload is from
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -103,13 +106,17 @@ jobs:
         with:
           report_type: test_results
           files: target/nextest/default/junit.xml
-          token: ${{ secrets.CODECOV_TOKEN }}
+          # Codecov takes the run's own identity (OIDC) in place of an upload
+          # token, so there is no secret to keep. A pull request from a fork
+          # has no such identity, and needs none: it uploads without.
+          use_oidc: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
           fail_ci_if_error: false
 
   coverage:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write # prove to Codecov which repository the upload is from
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -148,5 +155,6 @@ jobs:
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: lcov.info
-          token: ${{ secrets.CODECOV_TOKEN }}
+          # By the run's own identity, as the test results are above.
+          use_oidc: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
           fail_ci_if_error: false
