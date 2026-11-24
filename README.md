@@ -459,6 +459,23 @@ Early. What works today:
   came: a list of them scrolls at the screen's pace, and they take a
   fraction of the memory.
   A click on a picture opens the note, as a click on its text does.
+- **Markdown** — what a note marks is shown as it marks it: `*slanted*`
+  and `_slanted_`, `**bold**`, `~~struck out~~`, `` `code` `` in a line
+  and between two fences in lines of its own, `# headings`, `> what is
+  quoted`, `* items`, a rule (`---`), and links and pictures written
+  `[with a label](https://…)`. Nothing in a note says whether it is
+  Markdown, so nothing decides that for the whole of it: each mark is
+  taken for one only where it could be nothing else, on the edge of a
+  word and closed on its line. `2*3*4`, `snake_case`, `f**k` and a shrug
+  stay as they were written, and so does a note that marks nothing, to
+  the letter. A link that is given a label shows where it goes beside
+  it — `the docs (docs.rs)` — since a label can say anything; what is
+  code is not read for links, mentions or hashtags, and is not tagged
+  when a note is published. Headings are bold and no larger than the
+  text, and everything keeps the size and the line height it had, so a
+  row is as tall as it would be without its marks. Left as written:
+  `__double underscores__`, lists that start with `-`, `+` or a number,
+  and tables.
 - **Link previews** — under a note that links to a web page, a card with
   what the page says of itself: the picture it is shared with, the site,
   its title and a few words about it. A click opens

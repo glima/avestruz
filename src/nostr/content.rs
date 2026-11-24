@@ -16,10 +16,16 @@
 //!
 //! The text is split by `nostr`'s own parser, so what counts as a URL, a
 //! `nostr:` URI or a hashtag is what the rest of the ecosystem agrees on.
+//!
+//! Before that, what the note marks as Markdown is taken for what it is
+//! (see [`markdown`]): the text comes here as runs, each in one style,
+//! and each run is read for its links, mentions and hashtags. A note that
+//! marks nothing is one run, and is read as it always was.
 
 use nostr_sdk::prelude::{EventId, Nip21, NostrParser, PublicKey, RelayUrl, ToBech32, Token, Url};
 
 use crate::http;
+use crate::nostr::markdown::{self, Run, Style};
 use crate::nostr::outbox::Whereabouts;
 use crate::youtube;
 
@@ -65,11 +71,18 @@ const FILE_EXTENSIONS: [&str; 16] =
 /// what a name takes, whoever it turns out to be.
 const MENTION_CHARS: usize = 16;
 
+/// How many characters of text four of code take the room of: its
+/// letters are all as wide as the widest.
+const CODE_CHARS_PER_FOUR: usize = 5;
+
 /// One piece of a note, in reading order.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Segment {
     /// Plain text, line breaks included.
     Text(String),
+    /// Text the note marks as something else than plain: bold, slanted,
+    /// struck out, code, or quoted (see [`markdown`]). Without its marks.
+    Styled { text: String, style: Style },
     /// A web link: where it goes, and the shorter text that stands for it.
     Link { url: String, label: String },
     /// Someone mentioned by key (`nostr:npub1…`, `nostr:nprofile1…`). Shown
@@ -209,6 +222,20 @@ pub(crate) fn link_label(url: &Url) -> String {
     }
 }
 
+/// What stands for a link the note gives a `label` of its own: the
+/// label, and after it where the link goes, unless the label says so
+/// itself. A label can say anything, and a click on it opens the address:
+/// which site that is on is not left to the label. With no label, the
+/// address made short, as for any link.
+fn labelled(url: &Url, label: Option<&str>) -> String {
+    let Some(label) = label.map(str::trim).filter(|label| !label.is_empty()) else {
+        return link_label(url);
+    };
+    let host = url.host_str().unwrap_or_default();
+    let host = host.strip_prefix("www.").unwrap_or(host);
+    if label.to_lowercase().contains(&host.to_lowercase()) { label.to_string() } else { format!("{label} ({host})") }
+}
+
 /// Whether the path of `url` ends in one of `extensions`.
 fn has_extension(url: &Url, extensions: &[&str]) -> bool {
     url.path().rsplit_once('.').is_some_and(|(_, extension)| extensions.iter().any(|known| extension.eq_ignore_ascii_case(known)))
@@ -302,7 +329,7 @@ impl<'a> Builder<'a> {
     /// text so far ends the same way, or there is none.
     fn repeats(&self, space: char) -> bool {
         match self.content.segments.last() {
-            Some(Segment::Text(before)) => before.ends_with(space),
+            Some(Segment::Text(before) | Segment::Styled { text: before, .. }) => before.ends_with(space),
             Some(_) => false,
             None => true,
         }
@@ -377,11 +404,14 @@ impl<'a> Builder<'a> {
         self.room = self.room.saturating_sub(chars);
     }
 
-    /// Add plain text to the last text segment, or start one.
-    fn append(&mut self, text: &str) {
+    /// Add text in `style` to the last segment if that is text in the
+    /// same, or start one.
+    fn append(&mut self, text: &str, style: Style) {
         match self.content.segments.last_mut() {
-            Some(Segment::Text(last)) => last.push_str(text),
-            _ => self.content.segments.push(Segment::Text(text.to_string())),
+            Some(Segment::Text(last)) if style.is_plain() => last.push_str(text),
+            Some(Segment::Styled { text: last, style: same }) if *same == style => last.push_str(text),
+            _ if style.is_plain() => self.content.segments.push(Segment::Text(text.to_string())),
+            _ => self.content.segments.push(Segment::Styled { text: text.to_string(), style }),
         }
     }
 
@@ -390,27 +420,112 @@ impl<'a> Builder<'a> {
         if let Some(Segment::Text(last)) = self.content.segments.last_mut() {
             last.truncate(last.trim_end().len());
         }
-        self.append("\u{2026}");
+        self.append("\u{2026}", Style::default());
         self.full = true;
     }
 
-    /// Add plain text, as much of it as there is room for.
-    fn text(&mut self, text: &str) {
+    /// Add text in `style`, as much of it as there is room for.
+    fn text(&mut self, text: &str, style: Style) {
         for (index, line) in text.split('\n').enumerate() {
             if index > 0 {
-                self.append("\n");
+                self.append("\n", style);
                 self.content.line_chars.push(0);
             }
             let chars = line.chars().count();
             if chars > self.room {
                 let fits: String = line.chars().take(self.room).collect();
-                self.append(&fits);
+                self.append(&fits, style);
                 self.count(self.room);
                 self.cut();
                 return;
             }
-            self.append(line);
-            self.count(chars);
+            self.append(line, style);
+            // Code is wider than it is long.
+            self.count(if style.code { (chars * CODE_CHARS_PER_FOUR).div_ceil(4) } else { chars });
+        }
+    }
+
+    /// Read a run of the note's text, set in `style`, for what is in it:
+    /// links, the people and the notes it names, hashtags, and the text
+    /// between them.
+    fn read(&mut self, text: &str, style: Style) {
+        for token in NostrParser::new().parse(text) {
+            let token = match token {
+                Token::Url(url) => {
+                    self.link(url, None, style);
+                    continue;
+                }
+                token => token,
+            };
+            // What is set aside leaves its place in the text empty: the
+            // space or the line breaks on either side of it are left once,
+            // not twice.
+            let was_gap = std::mem::take(&mut self.gap);
+            match token {
+                Token::Nostr(uri) => match named(uri) {
+                    Named::Quote(quote) => {
+                        self.quote(quote);
+                        self.gap = true;
+                    }
+                    // Past the cut, only what is set aside is still looked
+                    // for: images, videos, quoted notes, and the page to
+                    // preview.
+                    Named::Inline(_) if self.full => {}
+                    Named::Inline(segment) => {
+                        let chars = match &segment {
+                            Segment::Reference(label) => label.chars().count(),
+                            _ => MENTION_CHARS,
+                        };
+                        self.whole(segment, chars);
+                    }
+                },
+                _ if self.full => {}
+                Token::Whitespace if was_gap && self.repeats(' ') => self.gap = true,
+                Token::LineBreak if was_gap && self.repeats('\n') => self.gap = true,
+                Token::Text(text) => self.text(text, style),
+                Token::Whitespace => self.text(" ", style),
+                Token::LineBreak => self.text("\n", style),
+                Token::Hashtag(tag) => {
+                    let tag = tag.trim_start_matches('#');
+                    self.whole(Segment::Hashtag(tag.to_string()), tag.chars().count() + 1);
+                }
+                // Links were seen to above.
+                Token::Url(_) => {}
+            }
+        }
+    }
+
+    /// A link: to a video or a picture, which is set aside, or to
+    /// anywhere else, which stands in the text as its address made short,
+    /// or as the `label` the note gives it. Where it stands among text in
+    /// `style`, an address that is not followed is set so too.
+    fn link(&mut self, url: Url, label: Option<&str>, style: Style) {
+        let video = is_video(&url, self.said_of(&url));
+        // The last page linked to is the one previewed, wherever in the
+        // note it is.
+        if !video && may_be_page(&url) {
+            self.content.preview = Some(url.to_string());
+        }
+        // The first link is the first of all of the note, past where its
+        // text is cut too: a video, or what a link in the text may be.
+        if self.content.first_link.is_none() && (video || (!is_image(&url) && matches!(url.scheme(), "http" | "https"))) {
+            self.content.first_link = Some(url.to_string());
+        }
+        self.gap = false;
+        if video {
+            self.video(&url);
+            self.gap = true;
+        } else if is_image(&url) {
+            self.image(&url);
+            self.gap = true;
+        } else if self.full {
+        } else if matches!(url.scheme(), "http" | "https") {
+            let label = labelled(&url, label);
+            let chars = label.chars().count();
+            self.whole(Segment::Link { url: url.to_string(), label }, chars);
+        } else {
+            // Other schemes are not followed, so they are not dressed as links.
+            self.text(url.as_str(), style);
         }
     }
 
@@ -448,70 +563,15 @@ pub fn parse_attached(content: &str, max_chars: usize, attached: &[Attachment]) 
 /// whether there was more.
 fn parse_up_to(content: &str, max_chars: usize, attached: &[Attachment]) -> (Content, bool) {
     let mut builder = Builder::new(max_chars, attached);
-    for token in NostrParser::new().parse(content.trim()) {
-        let video = matches!(&token, Token::Url(url) if is_video(url, builder.said_of(url)));
-        // The last page linked to is the one previewed, wherever in the
-        // note it is.
-        if let Token::Url(url) = &token
-            && !video
-            && may_be_page(url)
-        {
-            builder.content.preview = Some(url.to_string());
-        }
-        // The first link is the first of all of the note, past where its
-        // text is cut too: a video, or what a link in the text may be.
-        if let Token::Url(url) = &token
-            && builder.content.first_link.is_none()
-            && (video || (!is_image(url) && matches!(url.scheme(), "http" | "https")))
-        {
-            builder.content.first_link = Some(url.to_string());
-        }
-        // What is set aside leaves its place in the text empty: the space
-        // or the line breaks on either side of it are left once, not twice.
-        let was_gap = std::mem::take(&mut builder.gap);
-        match token {
-            Token::Url(url) if video => {
-                builder.video(&url);
-                builder.gap = true;
+    for run in markdown::runs(content.trim()) {
+        match run {
+            Run::Text { text, style } => builder.read(&text, style),
+            Run::Code { .. } if builder.full => {}
+            Run::Code { text, style } => {
+                builder.gap = false;
+                builder.text(&text, style);
             }
-            Token::Url(url) if is_image(&url) => {
-                builder.image(&url);
-                builder.gap = true;
-            }
-            Token::Nostr(uri) => match named(uri) {
-                Named::Quote(quote) => {
-                    builder.quote(quote);
-                    builder.gap = true;
-                }
-                // Past the cut, only what is set aside is still looked
-                // for: images, videos, quoted notes, and the page to
-                // preview.
-                Named::Inline(_) if builder.full => {}
-                Named::Inline(segment) => {
-                    let chars = match &segment {
-                        Segment::Reference(label) => label.chars().count(),
-                        _ => MENTION_CHARS,
-                    };
-                    builder.whole(segment, chars);
-                }
-            },
-            _ if builder.full => {}
-            Token::Whitespace if was_gap && builder.repeats(' ') => builder.gap = true,
-            Token::LineBreak if was_gap && builder.repeats('\n') => builder.gap = true,
-            Token::Text(text) => builder.text(text),
-            Token::Whitespace => builder.text(" "),
-            Token::LineBreak => builder.text("\n"),
-            Token::Url(url) if matches!(url.scheme(), "http" | "https") => {
-                let label = link_label(&url);
-                let chars = label.chars().count();
-                builder.whole(Segment::Link { url: url.to_string(), label }, chars);
-            }
-            // Other schemes are not followed, so they are not dressed as links.
-            Token::Url(url) => builder.text(url.as_str()),
-            Token::Hashtag(tag) => {
-                let tag = tag.trim_start_matches('#');
-                builder.whole(Segment::Hashtag(tag.to_string()), tag.chars().count() + 1);
-            }
+            Run::Link { url, label } => builder.link(url, Some(&label), Style::default()),
         }
     }
     let was_cut = builder.full;
@@ -570,6 +630,7 @@ impl Content {
 #[cfg(test)]
 mod tests {
     use super::{Attachment, Content, FEED_NOTE_MAX_CHARS, NoteImage, NoteVideo, Quote, Segment, imeta, parse, parse_attached};
+    use crate::nostr::markdown::Style;
     use nostr_sdk::prelude::{EventId, Keys, Nip19Event, Nip19Profile, RelayUrl, ToBech32};
 
     fn text(text: &str) -> Segment {
@@ -598,6 +659,74 @@ mod tests {
             [text("read "), link("https://www.example.com/a/page?utm=1", "example.com/a/page"), text(", then reply")]
         );
         assert_eq!(segments("https://example.com"), [link("https://example.com/", "example.com")]);
+    }
+
+    /// `text` as the note marks it: bold, slanted, or code.
+    fn styled(text: &str, style: Style) -> Segment {
+        Segment::Styled { text: text.to_string(), style }
+    }
+
+    const BOLD: Style = Style { bold: true, italic: false, strike: false, code: false, quiet: false };
+    const ITALIC: Style = Style { italic: true, bold: false, ..BOLD };
+    const CODE: Style = Style { code: true, bold: false, ..BOLD };
+
+    #[test]
+    fn what_a_note_marks_is_set_so_and_read_for_links_and_hashtags_like_the_rest() {
+        assert_eq!(
+            segments("**gm** #nostr, *see https://example.com/a now* and **#bitcoin**"),
+            [
+                styled("gm", BOLD),
+                text(" "),
+                Segment::Hashtag("nostr".into()),
+                text(", "),
+                styled("see ", ITALIC),
+                link("https://example.com/a", "example.com/a"),
+                styled(" now", ITALIC),
+                text(" and "),
+                Segment::Hashtag("bitcoin".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn code_is_shown_as_written_and_read_for_nothing() {
+        let content = parse("run `curl https://example.com/x #now` first", 10_000);
+        assert_eq!(content.segments, [text("run "), styled("curl https://example.com/x #now", CODE), text(" first")]);
+        assert_eq!((content.preview, content.first_link), (None, None), "what is in code is no link");
+        // Code is counted wider than it is long: its letters are.
+        assert_eq!(parse("`abcdefgh`", 10_000).line_chars, [10]);
+    }
+
+    #[test]
+    fn a_link_the_note_labels_says_its_label_and_where_it_goes() {
+        let labelled = |written: &str| match segments(written).as_slice() {
+            [Segment::Link { label, .. }] => label.clone(),
+            other => panic!("not one link: {other:?}"),
+        };
+        // Where it goes is said beside what the note calls it,
+        assert_eq!(labelled("[the docs](https://docs.rs/nostr)"), "the docs (docs.rs)");
+        // whatever the note calls it,
+        assert_eq!(labelled("[paypal.com](https://evil.example/paypal.com)"), "paypal.com (evil.example)");
+        // unless the label says so itself.
+        assert_eq!(labelled("[docs.rs/nostr](https://www.docs.rs/nostr)"), "docs.rs/nostr");
+        // One with no label is as any other link.
+        assert_eq!(labelled("[](https://example.com/a/page)"), "example.com/a/page");
+
+        // It is a link like any other: the page to preview, the first link.
+        let content = parse("see [this](https://example.com/page)", 10_000);
+        assert_eq!(content.preview.as_deref(), Some("https://example.com/page"));
+        assert_eq!(content.first_link.as_deref(), Some("https://example.com/page"));
+        // And a picture written as one is set aside as any other.
+        let content = parse("look ![a cat](https://example.com/cat.png) there", 10_000);
+        assert_eq!(content.segments, [text("look there")]);
+        assert_eq!(content.images.iter().map(|image| image.url.as_str()).collect::<Vec<_>>(), ["https://example.com/cat.png"]);
+    }
+
+    #[test]
+    fn a_note_cut_inside_what_it_marks_is_cut_as_any_other() {
+        let content = parse(&format!("**{}**", "bold ".repeat(40).trim_end()), 12);
+        assert_eq!(content.segments, [styled("bold bold bo", BOLD), text("\u{2026}")]);
+        assert!(content.whole.is_some());
     }
 
     #[test]

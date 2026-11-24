@@ -195,7 +195,7 @@ fn preview(note: &Note) -> String {
         .segments
         .iter()
         .map(|segment| match segment {
-            Segment::Text(text) => text.clone(),
+            Segment::Text(text) | Segment::Styled { text, .. } => text.clone(),
             Segment::Link { label, .. } => label.clone(),
             Segment::Hashtag(tag) => format!("#{tag}"),
             Segment::Reference(label) => label.clone(),

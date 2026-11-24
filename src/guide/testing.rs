@@ -167,7 +167,7 @@
 //!
 //! | Target | What it reads | Whose it is |
 //! |---|---|---|
-//! | `note_content` | A note's text, and an `imeta` tag ([`parse_attached`](crate::nostr::content::parse_attached), [`imeta`](crate::nostr::content::imeta)) | Anyone's who writes a note |
+//! | `note_content` | A note's text, the Markdown in it included, and an `imeta` tag ([`parse_attached`](crate::nostr::content::parse_attached), [`runs`](crate::nostr::markdown::runs), [`imeta`](crate::nostr::content::imeta)) | Anyone's who writes a note |
 //! | `link_preview` | The head of a linked page ([`previews::parse`](crate::previews::parse)) | Whatever server a note links to |
 //! | `relay_info` | The document a relay says what it is in ([`relay_info::parse`](crate::nostr::relay_info::parse)) | Any relay's |
 //! | `attached_file` | A file to attach, taken apart to leave out what it says beside the picture ([`media::prepare`](crate::media::prepare)) | Whoever made the file |

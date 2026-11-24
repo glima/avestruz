@@ -207,6 +207,16 @@ mod tests {
     }
 
     #[test]
+    fn what_is_written_as_code_is_not_tagged_and_what_is_stressed_is() {
+        let me = Keys::generate();
+        let text = "run `cargo test #[ignore] #slow` on **#rust**";
+        let note = signed(build(text, None, me.public_key()), &me);
+
+        assert_eq!(tags(&note), [vec!["t", "rust"]]);
+        assert_eq!(note.content, text, "the text is left as it was written, marks and all");
+    }
+
+    #[test]
     fn a_reply_to_a_note_that_starts_a_conversation_names_it_as_the_root() {
         let (me, them) = (Keys::generate(), Keys::generate());
         let root = signed(build("it starts", None, them.public_key()), &them);

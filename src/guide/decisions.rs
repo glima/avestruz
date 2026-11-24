@@ -275,6 +275,8 @@
 //! | A link that is opened | Only web links are handed to the desktop | [`crate::links`] |
 //! | A relay somebody names | Only `wss`, on the open internet, not blocked | [`public`](crate::nostr::outbox::public) |
 //! | An invoice | Only shown if it asks for the amount that was chosen | [`crate::nostr::zap`] |
+//! | A link a note gives a label of its own | Shown as the label and, beside it, the site it goes to: a label can say anything | [`crate::nostr::content`] |
+//! | Markdown in a note | Each mark is taken for one only where it could be nothing else, so a note that means none is shown as written. Marks inside marks are followed six deep, and a mark that nothing closes is looked for once | [`crate::nostr::markdown`] |
 //! | A name at a domain | Not shown until the domain itself has said it is theirs | [`crate::nostr::nip05`] |
 //!
 //! # The button and the window are two processes

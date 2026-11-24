@@ -55,7 +55,7 @@ fn plain_text(note: &Note, profiles: &HashMap<PublicKey, Profile>) -> String {
         .segments
         .iter()
         .map(|segment| match segment {
-            Segment::Text(text) => text.clone(),
+            Segment::Text(text) | Segment::Styled { text, .. } => text.clone(),
             Segment::Link { label, .. } | Segment::Reference(label) => label.clone(),
             Segment::Mention(person) => format!("@{}", display_name(profiles, person)),
             Segment::Hashtag(hashtag) => format!("#{hashtag}"),

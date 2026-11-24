@@ -25,6 +25,7 @@
 //!     subgraph read["Events read: what a view shows"]
 //!         models
 //!         content
+//!         markdown
 //!         thread
 //!         feed
 //!         engagement
@@ -61,6 +62,7 @@
 //! | [`engagement`] | What others made of a note: replies, reposts, likes and zaps |
 //! | [`feed`] | The notes of a feed, newest first, and the ones that wait beside it |
 //! | [`kept_drafts`] | Drafts as events, as the relay Avestruz runs itself keeps them |
+//! | [`markdown`] | What a note marks as bold, slanted, struck out, code, a heading, quoted or a labelled link |
 //! | [`models`] | Notes and profiles, as the views need them |
 //! | [`nip05`] | Names at a domain, and whether the domain agrees |
 //! | [`notifications`] | What others did that concerns the account: replies, mentions, reactions, reposts and zaps |
@@ -89,6 +91,7 @@ pub mod content;
 pub mod engagement;
 pub mod feed;
 pub mod kept_drafts;
+pub mod markdown;
 pub mod models;
 pub mod nip05;
 pub mod notifications;

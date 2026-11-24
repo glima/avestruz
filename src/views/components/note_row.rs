@@ -17,13 +17,15 @@
 //! moves, and what is under it makes room. Under all of the text the
 //! button shows less again. See [`Reading`].
 
+use std::cell::LazyCell;
 use std::collections::HashMap;
 
 use cosmic::Element;
+use cosmic::iced::font::{Style as FontStyle, Weight};
 use cosmic::iced::widget::Stack;
 use cosmic::iced::widget::text::{Shaping, Span, Wrapping};
 use cosmic::iced::widget::{rich_text, span, svg};
-use cosmic::iced::{Alignment, Background, Border, Color, Length, Point, mouse};
+use cosmic::iced::{Alignment, Background, Border, Color, Font, Length, Point, border, mouse};
 use cosmic::widget::menu::menu_button;
 use cosmic::widget::popover::{Position, popover};
 use cosmic::widget::{self, button, container, icon, text};
@@ -36,6 +38,7 @@ use crate::messages::Message;
 use crate::nostr::bookmarks::Bookmarks;
 use crate::nostr::content::{NoteImage, Segment, link_label};
 use crate::nostr::engagement::{Did, Engagement, Left, Reaction};
+use crate::nostr::markdown::Style;
 use crate::nostr::models::{Note, Profile, display_name};
 use crate::nostr::outbox::Whereabouts;
 use crate::previews::{PreviewState, PreviewStore};
@@ -220,6 +223,17 @@ pub(super) const NOTE_AVATAR_GAP: u16 = 8;
 /// it will take, if the note says its size, and this height if not.
 const NOTE_IMAGE_RADIUS: f32 = 6.0;
 const NOTE_IMAGE_FALLBACK_HEIGHT: f32 = 180.0;
+
+/// How much of the text's colour what a note quotes is set in, and how
+/// much of it stands behind code.
+const QUIET_TEXT_ALPHA: f32 = 0.65;
+const BEHIND_CODE_ALPHA: f32 = 0.12;
+
+/// The corners of what stands behind code, and how far it reaches past
+/// the code at either side. It takes no room: the text is where it would
+/// be without it.
+const CODE_RADIUS: f32 = 3.0;
+const CODE_PADDING: [f32; 2] = [0.0, 2.0];
 
 /// The line of actions under a note: how much room each action has around
 /// it.
@@ -417,7 +431,7 @@ impl NoteLink {
         match segment {
             Segment::Link { url, .. } => Some(Self::Web(url.clone())),
             Segment::Mention(public_key) => Some(Self::Profile(*public_key)),
-            Segment::Text(_) | Segment::Hashtag(_) | Segment::Reference(_) => None,
+            Segment::Text(_) | Segment::Styled { .. } | Segment::Hashtag(_) | Segment::Reference(_) => None,
         }
     }
 
@@ -430,15 +444,60 @@ impl NoteLink {
     }
 }
 
+/// What text a note marks is set in, beside the size and the face all
+/// its text has: the faces of what is stressed and of code, and the
+/// colours of what is quiet and of what is behind code.
+struct Faces {
+    text: Font,
+    code: Font,
+    quiet: Color,
+    behind_code: Color,
+}
+
+impl Faces {
+    /// As the theme has them now. Asked for once for a note that marks
+    /// something, and not at all for one that doesn't.
+    fn of_the_theme() -> Self {
+        let theme = cosmic::theme::active();
+        let on_background: Color = theme.cosmic().on_bg_color().into();
+        Self {
+            text: cosmic::font::default(),
+            code: cosmic::font::mono(),
+            quiet: Color { a: QUIET_TEXT_ALPHA, ..on_background },
+            behind_code: Color { a: BEHIND_CODE_ALPHA, ..on_background },
+        }
+    }
+
+    /// `text` as a span set in `style`.
+    fn styled<'a>(&self, text: &'a str, style: Style) -> Span<'a, NoteLink> {
+        let mut font = if style.code { self.code } else { self.text };
+        if style.bold {
+            font.weight = Weight::Bold;
+        }
+        if style.italic {
+            font.style = FontStyle::Italic;
+        }
+        let shown = span(text).font(font).strikethrough(style.strike).color_maybe(style.quiet.then_some(self.quiet));
+        if style.code {
+            shown.background(self.behind_code).border(border::rounded(CODE_RADIUS)).padding(CODE_PADDING)
+        } else {
+            shown
+        }
+    }
+}
+
 /// What a note says, the text `segments` of it, as rich text: links and
-/// mentions can be clicked, and they and hashtags are set in `accent`.
+/// mentions can be clicked, and they and hashtags are set in `accent`;
+/// what the note marks is set as it marks it.
 fn note_text<'a>(segments: &'a [Segment], context: &RowContext<'a>) -> Element<'a, Message> {
     let RowContext { profiles, accent, sizes, .. } = *context;
+    let faces = LazyCell::new(Faces::of_the_theme);
     let spans: Vec<Span<'a, NoteLink>> = segments
         .iter()
         .map(|segment| {
             let shown = match segment {
                 Segment::Text(text) => span(text.as_str()),
+                Segment::Styled { text, style } => faces.styled(text, *style),
                 Segment::Link { label, .. } => span(label.as_str()).color(accent).underline(true),
                 Segment::Mention(public_key) => span(format!("@{}", display_name(profiles, public_key))).color(accent),
                 Segment::Hashtag(tag) => span(format!("#{tag}")).color(accent),
@@ -2327,6 +2386,12 @@ mod tests {
             "https://example.com/only-a-picture.png".to_string(),
             "a video, of no size it says\nhttps://example.com/clip.mp4".to_string(),
             "and one of YouTube's\nhttps://youtu.be/aqz-KE-bpKQ".to_string(),
+            // Marked: a heading, what is stressed, code in a line and in
+            // lines of its own, something quoted, items, a rule.
+            "## What is new\nIt is **fully** keyboard-navigable, *at last*, and has a `--toggle` flag.\n\n\
+             > notes and other stuff\n* a feed\n* threads\n---\n```\nfn main() {\n    println!(\"gm\");\n}\n```"
+                .to_string(),
+            "**bold words all the way along the line and round to the next one, twice over** ".repeat(3),
             // Long enough to be cut, several times over, in lines and in
             // paragraphs.
             "the quick brown fox jumps over the lazy dog ".repeat(60),
@@ -2366,6 +2431,15 @@ mod tests {
             }
         }
     }
+    #[test]
+    fn what_stands_behind_code_takes_no_room() {
+        // Code is set in letters of another width, so a line of it may
+        // break elsewhere; what is drawn behind it adds nothing to that.
+        let row = |text: &str| measured_height_with(&note(text), &no_images(), SIZE, WIDTH);
+        assert_eq!(row("run `this` now"), row("run this now"));
+        assert_eq!(row("*slanted*, **bold**, ~~struck~~"), row("slanted, bold, struck"));
+    }
+
     /// A note a little longer than a row shows: cut, and not much taller
     /// in full.
     fn long_note() -> Note {
