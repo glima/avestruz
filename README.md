@@ -21,6 +21,10 @@ Inspired by [Vega](https://github.com/hoornet/vega),
 [Maré Player](https://github.com/glima/mare-player).
 It is pure Rust on libcosmic: no webview, no Tauri.
 
+<p align="center">
+  <img src="resources/screenshot_applet.png" alt="The Avestruz popup: the feed, with a video playing in a note and link previews under others" width="360" />
+</p>
+
 ## Status
 
 Early. What works today:
