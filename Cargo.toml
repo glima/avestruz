@@ -75,7 +75,7 @@ base64 = "0.22"
 serde = { version = "1", features = ["derive"] }
 
 # The QR code of an invoice, for a wallet on another device to scan.
-qrcode = { version = "0.14", default-features = false }
+qrcode = { version = "0.15", default-features = false }
 
 # Decoding those pictures. Only the formats listed are decoded; a note's link
 # to anything else stays a link.
