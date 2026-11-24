@@ -5,6 +5,7 @@
 [![Codecov](https://codecov.io/gh/glima/avestruz/graph/badge.svg)](https://codecov.io/gh/glima/avestruz)
 [![GitHub Release](https://img.shields.io/github/release/glima/avestruz.svg)](https://github.com/glima/avestruz/releases/latest)
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
+[![Tip limachaves@strike.me with Lightning](https://img.shields.io/badge/tip-lightning-F7931A?logo=lightning&logoColor=white)](https://strike.me/@limachaves/)
 
 **[Website](https://glima.github.io/avestruz/)** ·
 **[Documentation](https://glima.github.io/avestruz/doc/)** ·
