@@ -674,7 +674,7 @@ fn counted<'a>(
     let under = Point::new(0.0, action_height(context.sizes) + MENU_GAP);
     let action = widget::mouse_area(action).on_right_press(Message::ShowWho(note.id, what));
     let who = context.who.filter(|menu| menu.note == note.id && menu.what == what);
-    let (own, own_closes) = own.map_or((None, Message::CloseWho), |(open, closes)| (open, closes));
+    let (own, own_closes) = own.unwrap_or((None, Message::CloseWho));
     let action = popover(action).position(Position::Point(under));
     match (who, own) {
         (Some(who), _) => action.on_close(Message::CloseWho).popup(who_menu(who, context)).into(),
