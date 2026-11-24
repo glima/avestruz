@@ -15,6 +15,9 @@ updates:
     open-pull-requests-limit: 10
     ignore:
       - dependency-name: "libcosmic"
+      # The WebSocket crate `nostr-sdk` builds with: ours has to be the same
+      # one, and moves when `nostr-sdk` moves it.
+      - dependency-name: "tokio-tungstenite"
 
   # The cargo-fuzz harness is a *separate* workspace, so its lockfile isn't
   # touched by the main `cargo update` and drifts: stale entries then trip
@@ -28,6 +31,7 @@ updates:
     ignore:
       # At the revision the main crate is at: see above.
       - dependency-name: "libcosmic"
+      - dependency-name: "tokio-tungstenite"
 
   # What the website is built with (three.js, esbuild, glTF Transform).
   # Never ships in the applet.

@@ -69,14 +69,14 @@ serde_json = "1"
 # What a file is known by on a media server (Blossom): its SHA-256. And how
 # the event that authorizes an upload is put in a header.
 sha2 = "0.11"
-base64 = "0.22"
+base64 = "0.23"
 
 # Settings that are not plain strings and numbers, as COSMIC's config keeps
 # them.
 serde = { version = "1", features = ["derive"] }
 
 # The QR code of an invoice, for a wallet on another device to scan.
-qrcode = { version = "0.14", default-features = false }
+qrcode = { version = "0.15", default-features = false }
 
 # Decoding those pictures. Only the formats listed are decoded; a note's link
 # to anything else stays a link.
