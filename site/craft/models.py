@@ -38,6 +38,7 @@ LOOKS: dict[str, Look] = {
     "paper": Look("#efe9dc", material="paper", size=128),
     "porcelain": Look("#f4f2ec", roughness=0.15, size=128),
     "dish": Look("#e4e2dc", roughness=0.5, dirt=0.5, size=256),
+    "ink": Look("#1a1410", roughness=0.85, size=128),
     # What grows.
     "leaves": Look("#56702e", material="moss", size=512),
     "stem": Look("#4c7a34", roughness=0.7, size=128),
@@ -330,6 +331,27 @@ def acacia() -> Design:
     return d
 
 
+def signpost() -> Design:
+    """Which way to what: the documentation. A post with a board for each
+    part of the guide, pointing every which way."""
+    d = Design()
+    d.cone("post", 70, 2800, top=52, look="trunk")
+    d.sphere("cap", 62, (0, 0, 2810), "trunk")
+    # (what it says, how high its foot is, which way it points, how far it is turned)
+    boards = [("GUIDE", 2330, 1, 12), ("FLOWS", 2060, -1, -14), ("RELAYS", 1790, 1, -24), ("TESTS", 1520, -1, 18)]
+    front = -98
+    for i, (says, z, way, turn) in enumerate(boards):
+        tall, long, tip = 200, 640, 110
+        outline = [(-90 * way, z), (long * way, z), ((long + tip) * way, z + tall / 2), (long * way, z + tall), (-90 * way, z + tall)]
+        d.extrude(f"board_{i}", "facing", outline, -42, offset=front, look="pine")
+        # Something of the letters' look for them to be joined to, out of
+        # sight inside the board.
+        d.box(f"says_{i}", (10, 10, 10), (40 * way, front + 20, z + tall / 2), "ink")
+        d.write(f"says_{i}", says, (70 if way > 0 else -long + 20, z + 55), 92, front)
+        d.move([f"board_{i}", f"says_{i}"], axis=(0, 0, 1), angle=turn, origin=(0, 0, 0))
+    return d
+
+
 def rock() -> Design:
     """A rock, to be strewn about at any size."""
     d = Design()
@@ -342,5 +364,5 @@ def rock() -> Design:
 MODELS = {
     "ostrich": ostrich, "ostrich_head": ostrich_head, "tower": tower, "pole": pole, "bunker": bunker,
     "rod": rod, "bolt": bolt, "cloud": cloud, "blossom": blossom, "mailbox": mailbox,
-    "billboard": billboard, "telescope": telescope, "book": book, "acacia": acacia, "rock": rock,
+    "billboard": billboard, "telescope": telescope, "book": book, "signpost": signpost, "acacia": acacia, "rock": rock,
 }

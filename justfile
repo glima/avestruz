@@ -259,10 +259,10 @@ doc-open: (doc '--open')
 
 # Assemble the project website (site/ plus the icon) into target/site,
 # exactly as the Pages workflow publishes it: the scene and three.js packed
-# into one file, and the download table filled from the latest GitHub
-# release when `gh` can reach one. Needs npm. Preview with
-# `python3 -m http.server --directory target/site 8000`.
-site out=(cargo-target-dir / 'site'):
+# into one file, the documentation `just doc` builds under doc/, and the
+# download table filled from the latest GitHub release when `gh` can reach
+# one. Needs npm. `just site-open` shows it.
+site out=(cargo-target-dir / 'site'): doc
     #!/usr/bin/env bash
     set -euo pipefail
     npm ci --prefix site --omit=dev --ignore-scripts --no-audit --no-fund --silent
@@ -274,6 +274,13 @@ site out=(cargo-target-dir / 'site'):
         --target=es2022 --legal-comments=eof --log-level=warning --outfile="{{ out }}/scene/world.js"
     cp -r site/assets/models site/assets/tex site/assets/still.jpg "{{ out }}/assets/"
     cp resources/icon.svg "{{ out }}/assets/"
+    # The documentation, as rustdoc wrote it. It has no page of its own at
+    # the top, so doc/ goes to the crate's.
+    cp -r "{{ cargo-target-dir / 'doc' }}" "{{ out }}/doc"
+    printf '%s\n' '<!doctype html><meta charset="utf-8"><title>Avestruz documentation</title>' \
+        '<meta http-equiv="refresh" content="0; url=cosmic_applet_avestruz/index.html">' \
+        '<link rel="canonical" href="cosmic_applet_avestruz/index.html">' \
+        '<a href="cosmic_applet_avestruz/index.html">The documentation</a>' > "{{ out }}/doc/index.html"
     { gh release view --repo glima/avestruz --json tagName,url,assets 2>/dev/null || true; } \
         | python3 site/downloads.py "{{ out }}/index.html"
     echo "Site assembled in {{ out }}"

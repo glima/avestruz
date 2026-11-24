@@ -1,8 +1,9 @@
 name: Project site
 
 # Publishes site/ (with the icon from resources/) to GitHub Pages at
-# https://glima.github.io/avestruz/. `just site` assembles it, the same
-# recipe used to preview it locally. The scene's props and its still
+# https://glima.github.io/avestruz/, and under doc/ there the documentation
+# `just doc` builds from the source. `just site` assembles both, the same
+# recipe used to preview them locally. The scene's props and its still
 # picture are in the repository as files: making them takes tools a runner
 # does not have (see site/craft/README.md).
 on:
@@ -13,6 +14,12 @@ on:
       - "resources/icon.svg"
       - "justfile"
       - ".github/workflows/pages.yml"
+      # What the documentation is built from.
+      - "src/**"
+      - "docs/**"
+      - "build.rs"
+      - "Cargo.toml"
+      - "Cargo.lock"
   # Refresh the download links once a release has published its files.
   # (`release: published` never fires here: the Release workflow creates
   # releases with GITHUB_TOKEN, which does not trigger other workflows.)
@@ -42,6 +49,27 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      # What the crates link against: rustdoc builds the crate's dependencies
+      # as far as their metadata before it documents it.
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libdbus-1-dev \
+            libxkbcommon-dev \
+            libwayland-dev \
+            libgstreamer1.0-dev \
+            libgstreamer-plugins-base1.0-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+
+      - name: Cache cargo registry and build artifacts
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: pages-doc
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install just
         uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4.0.0

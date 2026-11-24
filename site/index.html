@@ -26,6 +26,7 @@
       <a href="#features">Features</a>
       <a href="#install">Install</a>
       <a href="#security">Security</a>
+      <a href="doc/">Docs</a>
       <a class="nav-gh" href="https://github.com/glima/avestruz">GitHub</a>
     </nav>
     <div class="modes" role="group" aria-label="How this page is drawn" hidden>
@@ -38,7 +39,7 @@
   <main id="top">
     <section class="hero">
       <div id="stage" class="stage">
-        <img class="still" src="assets/still.jpg" width="1600" height="900" alt="A plain at dusk: an ostrich among the things Nostr is made of — a relay mast, lines on poles, a bunker with a key, a mailbox, a flower, a storm cloud over a lightning rod.">
+        <img class="still" src="assets/still.jpg" width="1600" height="900" alt="A plain at dusk: an ostrich among the things Nostr is made of — a relay mast, lines on poles, a bunker with a key, a mailbox, a flower, a storm cloud over a lightning rod, a signpost.">
         <p id="stage-note" class="stage-note" hidden>The scene could not start here, so this is the plain page.</p>
         <p class="stage-wait" aria-hidden="true">Setting the scene…</p>
         <aside id="tour" class="tour" hidden aria-live="polite">
@@ -75,7 +76,7 @@
     <section id="nostr" class="subjects band">
       <div class="section-head">
         <h2>Nostr, piece by piece</h2>
-        <p>An open protocol with no company in the middle. These are its parts, and what Avestruz does with each.</p>
+        <p>An open protocol with no company in the middle. These are its parts, what Avestruz does with each, and where to read how.</p>
       </div>
       <div class="subject-grid">
         <article class="card subject" data-subject="nostr">
@@ -146,6 +147,13 @@
           <p>Lists are notes too: who you follow, what you keep, which relays you use. Part of a list can be encrypted, so that only you can read it, wherever you sign in.</p>
           <p>Avestruz keeps bookmarks that way, private, and has a page to browse them. Bookmarked notes are also never dropped from its local store.</p>
           <p class="nips"><a href="https://github.com/nostr-protocol/nips/blob/master/51.md">NIP-51</a></p>
+        </article>
+        <article class="card subject" data-subject="docs">
+          <p class="where">The signpost</p>
+          <h3>Documentation</h3>
+          <p>Avestruz says how it works. Its guide tells how the parts go together, what happens in which order, which relay is asked what, which NIPs are spoken, what was decided and why, and how it is tested — with diagrams, and every test by name.</p>
+          <p>It is written in the source, beside the code it is about, and published here from each change along with the documentation of every module.</p>
+          <p class="nips"><a href="doc/cosmic_applet_avestruz/guide/index.html">The guide</a> <a href="doc/cosmic_applet_avestruz/guide/architecture/index.html">Architecture</a> <a href="doc/cosmic_applet_avestruz/guide/flows/index.html">Flows</a> <a href="doc/cosmic_applet_avestruz/guide/relays/index.html">Relays</a> <a href="doc/cosmic_applet_avestruz/guide/protocol/index.html">Protocol</a> <a href="doc/cosmic_applet_avestruz/guide/decisions/index.html">Decisions</a> <a href="doc/cosmic_applet_avestruz/guide/testing/index.html">Testing</a> <a href="doc/">Every module</a></p>
         </article>
       </div>
     </section>
@@ -276,6 +284,7 @@ just build-release &amp;&amp; sudo just install</code></pre><button class="copy"
       <span>Avestruz is free software under the <a href="https://github.com/glima/avestruz/blob/main/LICENSE">MIT licence</a>.</span>
     </div>
     <p>Built with <a href="https://github.com/pop-os/libcosmic">libcosmic</a> and <a href="https://github.com/rust-nostr/nostr">rust-nostr</a>.
+       <a href="doc/">Documentation</a> ·
        <a href="https://github.com/glima/avestruz/issues">Report a bug</a> ·
        <a href="https://github.com/glima/avestruz/blob/main/CONTRIBUTING.md">Contribute</a></p>
     <p class="legal">COSMIC is a trademark of System76. The scene on this page is made from scripts: see <a href="https://github.com/glima/avestruz/tree/main/site/craft">how</a>.</p>

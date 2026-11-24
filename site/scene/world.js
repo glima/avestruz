@@ -27,6 +27,7 @@ const PLACES = {
   blossom: { at: [3.2, 4.9], turn: 0 },
   telescope: { at: [6.6, 2.6], turn: 0.5 },
   rod: { at: [9.4, -1.6], turn: 0.4 },
+  signpost: { at: [7.7, 5.4], turn: -0.2 },
   billboard: { at: [4.2, -6.4], turn: -0.25 },
   tower: { at: [7.0, -13.5], turn: 0.4 },
 };
@@ -52,6 +53,7 @@ const SUBJECTS = {
   panel: { props: ["billboard"], from: [1.5, 2.6, 8.5], look: [0.9, 2.5, 0], ring: 2.0 },
   search: { props: ["telescope"], from: [-1.5, 1.8, 4.6], look: [0.5, 1.1, 0], ring: 0.9 },
   bookmarks: { props: ["book"], from: [1.0, 1.5, 3.2], look: [0.3, 0.5, 0], ring: 1.0 },
+  docs: { props: ["signpost"], from: [-1.4, 2.0, 5.4], look: [0.5, 1.95, 0], ring: 0.6 },
 };
 
 const HOME = { from: new THREE.Vector3(1.0, 3.2, 17.5), look: new THREE.Vector3(1.4, 3.0, 0) };
@@ -366,7 +368,7 @@ export async function start(stage) {
 
   // ── The props ──
   const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
-  const names = ["ostrich", "ostrich_head", "tower", "pole", "bunker", "rod", "bolt", "cloud", "blossom", "mailbox", "billboard", "telescope", "book", "acacia", "rock"];
+  const names = ["ostrich", "ostrich_head", "tower", "pole", "bunker", "rod", "bolt", "cloud", "blossom", "mailbox", "billboard", "telescope", "book", "signpost", "acacia", "rock"];
   const [plain, ...loaded] = await Promise.all([
     ground(new THREE.TextureLoader()),
     ...names.map((name) => loader.loadAsync(new URL(`models/${name}.glb`, ASSETS).href)),

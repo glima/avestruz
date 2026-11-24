@@ -87,6 +87,26 @@ class Design:
         self.plane = plane
         return f"Sketch{self.sketches}"
 
+    def facing(self, y: float) -> str:
+        """Start a sketch on the upright plane at `y` that faces whoever
+        looks from -Y: its x is the world's X and its y the world's Z, so
+        that what is written on it reads the right way round from there.
+        Pushed out of it, a positive distance comes towards the looker."""
+        self.run("sketch.create", plane={"origin": [0, y, 0], "x_dir": [1, 0, 0], "y_dir": [0, 0, 1]})
+        self.sketches += 1
+        self.plane = "facing"
+        return f"Sketch{self.sketches}"
+
+    def write(self, body: str, text: str, at: tuple[float, float], height: float, y: float, proud: float = 4) -> None:
+        """Letters standing `proud` of the upright face at `y`, joined to
+        `body`: a body of the look they are to have, which need not touch
+        them. In SolidCraft's built-in font, so that it comes out the same
+        wherever it is made."""
+        self.facing(y)
+        self.run("sketch.text", text=text, at=list(at), height=height)
+        self.run("sketch.finish")
+        self.run("solid.extrude", distance=proud, operation="join", targets=[body], touching="one_body")
+
     def _on_plane(self, points):
         # SolidCraft's XZ sketch has its y along world -Z.
         return [[a, -b] if self.plane == "XZ" else [a, b] for a, b in points]
@@ -101,8 +121,12 @@ class Design:
 
     def extrude(self, name: str, plane: str, outline: list[tuple[float, float]], distance: float, offset: float = 0, look=None, **more) -> str:
         """Push a closed outline out of its plane, from `offset` along the
-        plane's normal: +Z for XY, +X for YZ, +Y for XZ."""
-        self.sketch(plane, offset)
+        plane's normal: +Z for XY, +X for YZ, +Y for XZ, and -Y for
+        `facing` (see [`Design.facing`])."""
+        if plane == "facing":
+            self.facing(offset)
+        else:
+            self.sketch(plane, offset)
         self.run("sketch.line", points=self._on_plane(outline), closed=True)
         self.run("sketch.finish")
         self.run("solid.extrude", distance=distance, body_name=name, **more)
