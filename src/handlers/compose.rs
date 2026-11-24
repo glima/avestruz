@@ -8,8 +8,13 @@
 //! new note is also written to a file whenever the composer or the popup is
 //! left, so it is there after a restart.
 //!
-//! Backspace leaves the composer as well, and is the one way out that
-//! may keep nothing (see [`Leaving`]). With nothing written there is
+//! Cancel, beside the way to publish, leaves and keeps nothing, without
+//! asking: it is what rubbing out all that was written and then leaving
+//! comes to, so there is no draft after it, and the files on their way to
+//! be attached are called off.
+//!
+//! Backspace leaves the composer as well, and may keep nothing too (see
+//! [`Leaving`]). With nothing written there is
 //! nothing to keep, and it leaves. With something written it asks first:
 //! keep it as a draft, discard it, or go on writing.
 //!

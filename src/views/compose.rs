@@ -6,7 +6,8 @@
 //! it quotes under the text, set apart as other clients will show it. The
 //! text is in
 //! an editor whose state is in the app model, so a popup that closes takes
-//! nothing with it. Ctrl+Enter publishes, as the button does.
+//! nothing with it. Ctrl+Enter publishes, as the button does; Cancel,
+//! beside it, leaves and keeps nothing of what was written.
 //!
 //! Above the text, a control chooses between writing it and looking at how
 //! it would show: the note as a row of a list would have it, whole, in a
@@ -299,6 +300,12 @@ impl AppModel {
         let attach = button::icon(widget::icon::from_name("mail-attachment-symbolic"))
             .tooltip(fl!("compose-attach"))
             .on_press_maybe((!composer.publishing && !self.media.picking).then_some(Message::AttachMedia));
+        // The way out that keeps nothing: what rubbing out all that was
+        // written and then leaving comes to. Not while it is on its way
+        // out: there is no calling that back.
+        let cancel = button::standard(fl!("compose-cancel"))
+            .tooltip(fl!("compose-cancel-tip"))
+            .on_press_maybe((!composer.publishing).then_some(Message::DiscardDraft));
         let footer = widget::Row::new()
             .push(attach)
             .push(
@@ -306,6 +313,7 @@ impl AppModel {
                     .width(Length::Fill)
                     .clip(true),
             )
+            .push(cancel)
             .push(text(fl!("compose-shortcut")).size(11).wrapping(Wrapping::None))
             .push(button::suggested(publish_label).on_press_maybe(can_publish.then_some(Message::Publish)))
             .spacing(8)

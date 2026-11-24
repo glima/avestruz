@@ -275,7 +275,9 @@ Early. What works today:
   what is written as it will show once it is out: Markdown, pictures,
   videos, the page it links to, the people it names and the notes it
   quotes, under your name and picture; **Write**, or Ctrl+P again, goes
-  back to the text. It can be published from either. A note is
+  back to the text. It can be published from either. **Cancel**, beside
+  **Publish**, leaves the composer and keeps nothing: no draft is left,
+  and files on their way to be attached are called off. A note is
   signed with the key from the keyring, which is read for each signature
   and not held, or by the remote signer, and counts as published once a
   relay has taken it; until then the text stays in the composer. Notes,
