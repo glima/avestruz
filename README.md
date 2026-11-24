@@ -75,6 +75,7 @@ Early. What works today:
   | `B` | Show the bookmarks |
   | `.` | Show the notes that wait, as the button over the list does |
   | `?` | Show what the keys do |
+  | Ctrl+P | In the composer: what is being written as it will show, and back to writing it |
   | Ctrl+Shift+S | Save a picture of the popup, as it shows, to your pictures folder (`avestruz-<date>_<time>.png`) |
 
   The note the keyboard is at has a line around it. A list keeps its
@@ -269,7 +270,11 @@ Early. What works today:
   in the event store, as every event received is.
 - **Writing** — with full access, a new note from the feed, a reply from
   a thread and a quote from under any note, in a composer of their own;
-  Ctrl+Enter publishes. A note is
+  Ctrl+Enter publishes. **Preview**, above the text, or Ctrl+P, shows
+  what is written as it will show once it is out: Markdown, pictures,
+  videos, the page it links to, the people it names and the notes it
+  quotes, under your name and picture; **Write**, or Ctrl+P again, goes
+  back to the text. It can be published from either. A note is
   signed with the key from the keyring, which is read for each signature
   and not held, or by the remote signer, and counts as published once a
   relay has taken it; until then the text stays in the composer. Notes,

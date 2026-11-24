@@ -101,6 +101,7 @@ impl AppModel {
             vec![
                 // One key to a box: these two are pressed together.
                 (&["Ctrl+Enter"], fl!("keys-publish")),
+                (&["Ctrl+P"], fl!("keys-preview")),
                 (&["Backspace"], fl!("keys-leave-composer")),
                 (&["Esc"], fl!("keys-escape")),
                 (&["Ctrl+Shift+S"], fl!("keys-screenshot")),

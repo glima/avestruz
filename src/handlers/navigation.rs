@@ -415,6 +415,16 @@ impl AppModel {
     /// Show `page` over whatever is on show now, from its top: the scroller
     /// has the place of the list it was opened from.
     pub(crate) fn open_page(&mut self, page: Page) -> Task<cosmic::Action<Message>> {
+        // Somebody named in what is being written, or a note it quotes, may
+        // have been pressed to get here, where the composer shows how it
+        // would look: what was written is kept, as the way back keeps it.
+        let kept = if self.view_state == ViewState::Compose {
+            let kept = self.keep_draft();
+            self.composer = None;
+            kept
+        } else {
+            Task::none()
+        };
         if self.pages.len() >= MAX_OPEN_PAGES {
             self.pages.remove(0);
         }
@@ -423,7 +433,7 @@ impl AppModel {
         // One of those who left something on a note may have been pressed
         // to get here: the list of them is not there to come back to.
         self.who_menu = None;
-        scroll_list_to(0.0)
+        Task::batch([kept, scroll_list_to(0.0)])
     }
 
     /// Close the page on show: back to the page it was opened from, or to

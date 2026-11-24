@@ -162,6 +162,19 @@ impl cosmic::Application for AppModel {
             })
             .build();
 
+        // Writing a note and looking at how it would show, for the control
+        // that chooses: writing, until the look is asked for.
+        let compose_tabs = [false, true]
+            .into_iter()
+            .fold(segmented_button::Model::builder(), |tabs, preview| {
+                let label = if preview { fl!("compose-tab-preview") } else { fl!("compose-tab-write") };
+                tabs.insert(|choice| {
+                    let choice = choice.text(label).data(preview);
+                    if preview { choice } else { choice.activate() }
+                })
+            })
+            .build();
+
         // Which notifications show, for the control that chooses.
         let notification_tabs = Tab::ALL
             .into_iter()
@@ -213,6 +226,7 @@ impl cosmic::Application for AppModel {
             notification_tabs,
             pages: Vec::new(),
             composer: None,
+            compose_tabs,
             drafts: Drafts::default(),
             draft_path: draft_path.clone(),
             drafts_kept: HashMap::new(),
@@ -330,6 +344,28 @@ impl cosmic::Application for AppModel {
                     if modifiers.control() && modifiers.shift() && matches!(key.as_ref(), Key::Character("s" | "S")) =>
                 {
                     Some(Message::TakeScreenshot)
+                }
+                // Nor Ctrl+P: what is being written, as it would show, and
+                // back to writing it.
+                cosmic::iced::Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, repeat: false, .. })
+                    if modifiers.control()
+                        && !modifiers.shift()
+                        && !modifiers.alt()
+                        && !modifiers.logo()
+                        && matches!(key.as_ref(), Key::Character("p" | "P")) =>
+                {
+                    Some(Message::ToggleComposePreview)
+                }
+                // Ctrl+Enter is the text's while the keyboard is in it. Where
+                // it is not, as when the text is not what shows, it
+                // publishes all the same.
+                cosmic::iced::Event::Keyboard(keyboard::Event::KeyPressed {
+                    key: Key::Named(Named::Enter),
+                    modifiers,
+                    repeat: false,
+                    ..
+                }) if status == Status::Ignored && modifiers.control() && !modifiers.alt() && !modifiers.logo() => {
+                    Some(Message::Publish)
                 }
                 cosmic::iced::Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, repeat, .. })
                     if status == Status::Ignored && !modifiers.command() && !modifiers.alt() && !modifiers.logo() =>
@@ -785,6 +821,9 @@ impl AppModel {
                 self.handle_compose_edited(action);
                 Task::none()
             }
+            Message::SelectComposeTab(chosen) => self.handle_select_compose_tab(chosen),
+            Message::ToggleComposePreview => self.handle_toggle_compose_preview(),
+            Message::ComposePreviewed(note) => self.handle_compose_previewed(note),
             Message::CloseComposer => self.handle_close_composer(),
             Message::ComposerRubbedOut => self.handle_composer_rubbed_out(),
             Message::DiscardDraft => self.handle_discard_draft(),

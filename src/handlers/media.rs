@@ -591,7 +591,7 @@ impl AppModel {
                 let text = composer.content.text();
                 let lead = if text.trim().is_empty() || text.ends_with('\n') { "" } else { "\n" };
                 composer.content.perform(Action::Edit(Edit::Paste(Arc::new(format!("{lead}{}\n", attachment.url)))));
-                Task::none()
+                self.preview_composed_anew()
             }
             None => {
                 let mut text = self.drafts.get(upload.target).to_string();

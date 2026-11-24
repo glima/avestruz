@@ -211,7 +211,7 @@
 //! | The feed | `following`, `follows`, `feeds_made`, `feed_checked_at`, `feed_modes` | A [`FeedState`](crate::state::FeedState) |
 //! | What is open over the feed | `pages` | A stack of [`Page`](crate::state::Page): threads, profiles, the bookmarks, searches, the notifications |
 //! | What the account is told of | `notifications`, `notification_tabs` | A [`NotificationsState`](crate::state::NotificationsState): kept up while no page shows it, for the count of what is new |
-//! | Writing | `composer`, `drafts`, `drafts_kept`, `draft_path` | The editor's content is here, not in the editor |
+//! | Writing | `composer`, `compose_tabs`, `drafts`, `drafts_kept`, `draft_path` | The editor's content is here, not in the editor, and so is what is written as it would show, while that is looked at |
 //! | What was made of notes | `engagement`, `engagement_asked`, `pending_marks`, `seen_on` | Counts by note, and the reactions and reposts on their way |
 //! | Reacting | `reaction_menu`, `reaction_suggestions` | What to react with, on offer for one note, and the emoji offered first |
 //! | Bookmarks | `bookmarks`, `bookmark_pending`, `bookmark_first_list` | A [`BookmarkState`](crate::state::BookmarkState) |

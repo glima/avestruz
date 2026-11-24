@@ -1159,31 +1159,15 @@ pub(super) fn said<'a>(
 /// above what is in view, for showing less of it to scroll back by (see
 /// [`Expanded`]).
 pub fn note_row<'a>(note: &'a Note, context: &RowContext<'a>) -> Element<'a, Message> {
-    let RowContext { profiles, images, now, sizes, expanded, .. } = *context;
-    let above = expanded.above(&note.id);
-    let name = display_name(profiles, &note.author);
-    let picture = profiles.get(&note.author).and_then(|profile| profile.picture.as_deref());
-    let author_picture = opening_profile(avatar(images, picture, &note.author, &name, NOTE_AVATAR_SIZE), note.author);
-
-    let header = widget::Row::new()
-        .push(author_picture)
-        // The name takes the room the time leaves, and is cut rather than
-        // wrapped when it doesn't fit.
-        .push(
-            container(opening_profile(
-                text(name).size(sizes.name()).font(cosmic::font::bold()).wrapping(Wrapping::None),
-                note.author,
-            ))
-            .width(Length::Fill)
-            .clip(true),
-        )
-        .push(text(relative_time(now, note.created_at)).size(sizes.time()).wrapping(Wrapping::None))
-        .spacing(NOTE_AVATAR_GAP)
-        .align_y(Alignment::Center);
-
+    let above = context.expanded.above(&note.id);
     let reading = Reading::of_row(above.is_some());
-    let body = said(widget::Column::new().push(header).spacing(NOTE_SPACING).width(Length::Fill), note, context, reading)
-        .push(note_actions(note, context));
+    let body = said(
+        widget::Column::new().push(who_and_when(note, context)).spacing(NOTE_SPACING).width(Length::Fill),
+        note,
+        context,
+        reading,
+    )
+    .push(note_actions(note, context));
 
     let row = widget::Column::new()
         .push(body)
@@ -1199,11 +1183,45 @@ pub fn note_row<'a>(note: &'a Note, context: &RowContext<'a>) -> Element<'a, Mes
     }
 }
 
+/// A note that is being written, as its row would show it once it is out:
+/// who writes it, and all it says. Without the line of actions and the
+/// line under a row: there is nothing to act on yet, and no row after it.
+pub fn note_being_written<'a>(note: &'a Note, context: &RowContext<'a>) -> Element<'a, Message> {
+    let column = widget::Column::new().push(who_and_when(note, context)).spacing(NOTE_SPACING).width(Length::Fill);
+    said(column, note, context, Reading::Whole).into()
+}
+
+/// The first line of a row: the picture of who wrote `note`, their name,
+/// and how long ago they wrote it.
+fn who_and_when<'a>(note: &'a Note, context: &RowContext<'a>) -> Element<'a, Message> {
+    let RowContext { profiles, images, now, sizes, .. } = *context;
+    let name = display_name(profiles, &note.author);
+    let picture = profiles.get(&note.author).and_then(|profile| profile.picture.as_deref());
+    let author_picture = opening_profile(avatar(images, picture, &note.author, &name, NOTE_AVATAR_SIZE), note.author);
+
+    widget::Row::new()
+        .push(author_picture)
+        // The name takes the room the time leaves, and is cut rather than
+        // wrapped when it doesn't fit.
+        .push(
+            container(opening_profile(
+                text(name).size(sizes.name()).font(cosmic::font::bold()).wrapping(Wrapping::None),
+                note.author,
+            ))
+            .width(Length::Fill)
+            .clip(true),
+        )
+        .push(text(relative_time(now, note.created_at)).size(sizes.time()).wrapping(Wrapping::None))
+        .spacing(NOTE_AVATAR_GAP)
+        .align_y(Alignment::Center)
+        .into()
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         Bookmarking, NOTE_ACTION_WIDTH, NOTE_SPACING, NoteLink, Reacting, RowContext, RowSizes, estimated_note_height,
-        fold_height, note_row, opening_thread, relay_name, seen_on_width,
+        fold_height, note_being_written, note_row, opening_thread, relay_name, seen_on_width,
     };
     use crate::emoji::Group;
     use crate::images::{ImageRequest, ImageShape, ImageStore, LoadedImage};
@@ -1329,6 +1347,22 @@ mod tests {
         size: u16,
         width: f32,
     ) -> f32 {
+        measured(note, images, previews, videos, expanded, size, width, false)
+    }
+
+    /// How tall `note` lays out: as its row, or as it shows while it is
+    /// `being_written`.
+    #[allow(clippy::too_many_arguments)]
+    fn measured(
+        note: &Note,
+        images: &ImageStore,
+        previews: &PreviewStore,
+        videos: &Videos,
+        expanded: &Expanded,
+        size: u16,
+        width: f32,
+        being_written: bool,
+    ) -> f32 {
         let renderer = crate::views::components::testing::renderer();
         let profiles = HashMap::new();
         let engagement = HashMap::new();
@@ -1354,10 +1388,36 @@ mod tests {
             menu_open: false,
             sizes: RowSizes::new(size),
         };
-        let mut element = note_row(note, &context);
+        let mut element = if being_written { note_being_written(note, &context) } else { note_row(note, &context) };
         let mut tree = Tree::new(element.as_widget());
         let limits = layout::Limits::new(Size::ZERO, Size::new(width, f32::INFINITY));
         element.as_widget_mut().layout(&mut tree, &renderer, &limits).size().height
+    }
+
+    #[test]
+    fn a_note_being_written_shows_whole_and_without_what_a_row_ends_with() {
+        let me = Keys::generate().public_key();
+        let being_written = |text: &str| {
+            let note = Note::being_written(text, &[], me, 0);
+            measured(&note, &no_images(), &no_previews(), &Videos::default(), &Expanded::default(), SIZE, WIDTH, true)
+        };
+
+        // Short of the line of actions, the line under the row and the room
+        // above it: there is nothing to act on, and no row after it.
+        let less = measured_height(&note("gm")) - being_written("gm");
+        assert!((20.0..60.0).contains(&less), "{less} shorter than the row");
+        // What is marked shows as it marks it, here as in a row.
+        let marked = "# gm\n| a | b |\n|---|---|\n| 1 | 2 |";
+        assert_eq!(measured_height(&note(marked)) - being_written(marked), less);
+
+        // A long one shows all it says, with nothing to press for the
+        // rest: as tall as its row in full, less what that ends with and
+        // the button that shows less.
+        let long = "the quick brown fox jumps over the lazy dog ".repeat(60);
+        let (cut, in_full) = (measured_height(&note(&long)), measured_height_in_full(&note(&long), SIZE, WIDTH));
+        assert!(in_full > cut + 100.0, "{in_full} in full, {cut} cut");
+        let whole = being_written(&long);
+        assert!(whole > cut && whole < in_full - less, "{whole} being written, {in_full} in full");
     }
 
     /// How tall `said` lays out on its own, in text of `size`, `width` wide.

@@ -81,7 +81,8 @@ pub use link_preview::{link_preview, link_preview_height};
 pub use media_placeholder::{MediaPlaceholder, shown_size};
 pub use menu::{MENU_GAP, MENU_WIDTH, choice_menu, menu, menu_at, menu_height};
 pub use note_row::{
-    Bookmarking, Reacting, RowContext, RowSizes, estimated_note_height, link_line, marking, note_row, opening_thread,
+    Bookmarking, Reacting, RowContext, RowSizes, estimated_note_height, link_line, marking, note_being_written, note_row,
+    opening_thread,
 };
 pub use notification_row::{estimated_notification_height, notification_row};
 pub use picture::Picture;

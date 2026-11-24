@@ -29,6 +29,27 @@
 //! the text. That note's address is put under what was written when it goes
 //! out, and may be all that goes out: a quote needs nothing said.
 //!
+//! What is written can be looked at as it would show once it is out, in
+//! place of the text: the control above the text chooses, and Ctrl+P is
+//! the other of the two. It is what publishing would send, read as a row
+//! reads a note and shown whole: Markdown, pictures, videos, the page it
+//! links to, the people it names and the notes it quotes, which are looked
+//! for as a list would look for them. The text is not written to
+//! meanwhile, so what shows is what would go out; a file that gets where
+//! it was going meanwhile shows too. Pressing somebody it names, or a note
+//! it quotes, leaves the composer as the way back does: what was written
+//! is kept.
+//!
+//! ```mermaid
+//! flowchart LR
+//!     text["The text"] -->|"Preview, Ctrl+P"| note["As a note that is not one yet"]
+//!     note --> shown["Shown as a row would show it, whole"]
+//!     note -->|"it quotes notes"| sought["Looked for: the store, then the relays"]
+//!     sought -->|"it says the same still"| shown
+//!     shown -->|"Write, Ctrl+P"| text
+//!     shown -->|"Publish, Ctrl+Enter"| out["Signed and sent"]
+//! ```
+//!
 //! A file is attached by sending it to the account's media servers and
 //! putting its address in the text (see [`crate::handlers::media`]). What
 //! the note says of that file goes out with it, as long as the address is
@@ -39,23 +60,26 @@
 //! taken it the text stays where it is; once one has, the note or the quote
 //! shows at the top of the feed, or the reply in its place in the thread.
 
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use cosmic::iced::widget::operation::focus;
 use cosmic::prelude::*;
+use cosmic::widget::segmented_button;
 use cosmic::widget::text_editor::{Action, Content, Motion};
 use nostr_sdk::prelude::{EventId, PublicKey, Tag};
 
 use crate::drafts;
 use crate::fl;
 use crate::handlers::auth::sign_error_text;
+use crate::helpers::unix_now;
 use crate::messages::{Message, PublishFailure};
 use crate::nostr::account::Signer;
 use crate::nostr::blossom;
 use crate::nostr::client::{NostrService, PublishError};
 use crate::nostr::compose::{self, Target};
 use crate::nostr::models::Note;
-use crate::state::{AppModel, Composer, ViewState};
+use crate::state::{AppModel, Composer, Preview, ViewState};
 use crate::views::compose::COMPOSE_EDITOR_ID;
 
 /// How long after the text was last rubbed out a Backspace is still taken
@@ -120,6 +144,29 @@ async fn publish(
     Ok(service.note(event).await)
 }
 
+/// What is in `composer` as it would go out: the text, without the space
+/// around it, and under the text of a quote the address of the note it
+/// quotes.
+fn outgoing(composer: &Composer) -> String {
+    let text = composer.content.text().trim().to_string();
+    match (composer.target, &composer.about) {
+        (Target::Quote(_), Some(quoted)) => compose::quote(&text, quoted),
+        _ => text,
+    }
+}
+
+/// Where writing is in the control that chooses between it and the look
+/// at how what is written would show, and where the look is.
+const WRITE_TAB: u16 = 0;
+const PREVIEW_TAB: u16 = 1;
+
+/// Whether `found` is `shown`, which is being written and looked at, with
+/// no fewer of the notes it quotes: what was looked for when it said
+/// something else is not what it says now.
+fn is_the_same_with_more(shown: &Note, found: &Note) -> bool {
+    shown.content == found.content && shown.quoted_count() <= found.quoted_count()
+}
+
 /// Why an event did not go out, in the user's language.
 pub(crate) fn publish_error_text(error: PublishError) -> String {
     match error {
@@ -153,9 +200,108 @@ impl AppModel {
         }
         let mut content = Content::with_text(self.drafts.get(target));
         content.perform(Action::Move(Motion::DocumentEnd));
-        self.composer = Some(Composer { target, about, content, publishing: false, error: None, leaving: false, rubbed: None });
+        self.composer = Some(Composer {
+            target,
+            about,
+            content,
+            publishing: false,
+            error: None,
+            leaving: false,
+            rubbed: None,
+            preview: None,
+        });
+        self.compose_tabs.activate_position(WRITE_TAB);
         self.view_state = ViewState::Compose;
         focus(COMPOSE_EDITOR_ID.clone())
+    }
+
+    /// Writing, or looking at how what is written would show, was chosen
+    /// in the control above the text: `chosen` is that choice in it.
+    pub fn handle_select_compose_tab(&mut self, chosen: segmented_button::Entity) -> Task<cosmic::Action<Message>> {
+        match self.compose_tabs.data::<bool>(chosen).copied() {
+            Some(preview) => self.show_compose_preview(preview),
+            None => Task::none(),
+        }
+    }
+
+    /// Ctrl+P: the other of the two. Nothing, where nothing is being
+    /// written.
+    pub fn handle_toggle_compose_preview(&mut self) -> Task<cosmic::Action<Message>> {
+        match &self.composer {
+            Some(composer) if self.view_state == ViewState::Compose => self.show_compose_preview(composer.preview.is_none()),
+            _ => Task::none(),
+        }
+    }
+
+    /// Show what is written as it would show once out (`preview`), or the
+    /// text again, with the keyboard back in it. A video that played in
+    /// what is not looked at any more is held.
+    fn show_compose_preview(&mut self, preview: bool) -> Task<cosmic::Action<Message>> {
+        let Some(composer) = self.composer.as_mut() else {
+            return Task::none();
+        };
+        if preview {
+            self.compose_tabs.activate_position(PREVIEW_TAB);
+            return self.preview_composed();
+        }
+        composer.preview = None;
+        self.compose_tabs.activate_position(WRITE_TAB);
+        self.videos.pause();
+        focus(COMPOSE_EDITOR_ID.clone())
+    }
+
+    /// Put together how what is in the composer would show, as it is now:
+    /// what [`Self::handle_publish`] would send, read as a row reads a
+    /// note, with what it says of the files attached to it. The note a
+    /// quote is about is at hand; any other that the text names is looked
+    /// for, and so is everyone it mentions.
+    fn preview_composed(&mut self) -> Task<cosmic::Action<Message>> {
+        let Some(author) = self.account.as_ref().map(|account| account.public_key) else {
+            return Task::none();
+        };
+        let Some(composer) = self.composer.as_mut() else {
+            return Task::none();
+        };
+        let text = outgoing(composer);
+        let at_hand: HashMap<EventId, Note> = composer.about.iter().map(|note| (note.id, note.clone())).collect();
+        let note = Note::being_written(&text, &self.media.said_in(&text), author, unix_now()).with_quoted(&at_hand);
+        composer.preview = Some(Preview::of(note.clone()));
+
+        let people = self.look_up_people(note.people().collect());
+        let quoted = match self.nostr.clone() {
+            Some(service) if note.quotes_shown().next().is_some() => {
+                Task::perform(async move { service.quoting(note).await }, |note| {
+                    cosmic::Action::App(Message::ComposePreviewed(note))
+                })
+            }
+            _ => Task::none(),
+        };
+        Task::batch([people, quoted])
+    }
+
+    /// What is in the composer changed while how it would show is looked
+    /// at, and not by being written to: a file attached to it got where it
+    /// was going. It shows as it is now.
+    pub(crate) fn preview_composed_anew(&mut self) -> Task<cosmic::Action<Message>> {
+        match &self.composer {
+            Some(composer) if composer.preview.is_some() => self.preview_composed(),
+            _ => Task::none(),
+        }
+    }
+
+    /// The notes that what is being written quotes were looked for: `note`
+    /// is it with those that were found. Nothing, if it says something
+    /// else by now, or is not looked at any more.
+    pub fn handle_compose_previewed(&mut self, note: Note) -> Task<cosmic::Action<Message>> {
+        let Some(preview) = self.composer.as_mut().and_then(|composer| composer.preview.as_mut()) else {
+            return Task::none();
+        };
+        if !is_the_same_with_more(&preview.note, &note) {
+            return Task::none();
+        }
+        let people = note.people().collect();
+        preview.note = note;
+        self.look_up_people(people)
     }
 
     /// Write a new note.
@@ -407,6 +553,10 @@ impl AppModel {
     /// written.
     pub fn handle_close_composer(&mut self) -> Task<cosmic::Action<Message>> {
         let kept = self.keep_draft();
+        // A video that played in how it would show has nobody watching.
+        if self.composer.as_ref().is_some_and(|composer| composer.preview.is_some()) {
+            self.videos.pause();
+        }
         self.composer = None;
         Task::batch([kept, self.show_list_view()])
     }
@@ -421,11 +571,7 @@ impl AppModel {
         let Some(composer) = self.composer.as_mut().filter(|composer| !composer.publishing) else {
             return Task::none();
         };
-        let text = composer.content.text().trim().to_string();
-        let text = match (composer.target, &composer.about) {
-            (Target::Quote(_), Some(quoted)) => compose::quote(&text, quoted),
-            _ => text,
-        };
+        let text = outgoing(composer);
         let target = composer.target;
         // Not while something attached to it is still on its way.
         if text.is_empty() || self.media.uploads.iter().any(|upload| upload.target == target) {
@@ -509,8 +655,61 @@ impl AppModel {
 
 #[cfg(test)]
 mod tests {
-    use super::{Leaving, RUBBING_OUT, held_from_rubbing_out};
+    use super::{Leaving, RUBBING_OUT, held_from_rubbing_out, is_the_same_with_more, outgoing};
+    use crate::nostr::compose::Target;
+    use crate::nostr::models::Note;
+    use crate::state::Composer;
+    use cosmic::widget::text_editor::Content;
+    use nostr_sdk::prelude::{EventId, Keys};
+    use std::collections::HashMap;
     use std::time::{Duration, Instant};
+
+    /// A composer on `target`, about `about`, with `text` in it.
+    fn composer(target: Target, about: Option<Note>, text: &str) -> Composer {
+        Composer {
+            target,
+            about,
+            content: Content::with_text(text),
+            publishing: false,
+            error: None,
+            leaving: false,
+            rubbed: None,
+            preview: None,
+        }
+    }
+
+    #[test]
+    fn what_goes_out_is_the_text_without_the_space_around_it_and_a_quote_names_its_note() {
+        let me = Keys::generate().public_key();
+        assert_eq!(outgoing(&composer(Target::Note, None, "\n  gm\n\n")), "gm");
+
+        let quoted = Note { id: EventId::from_byte_array([3; 32]), ..Note::being_written("gn", &[], me, 0) };
+        let said = outgoing(&composer(Target::Quote(quoted.id), Some(quoted.clone()), "this "));
+        let (text, address) = said.split_once('\n').expect("the address is on a line of its own");
+        assert_eq!(text, "this");
+        assert!(address.starts_with("nostr:nevent1"), "{address}");
+        // With nothing said about it, the address is all there is.
+        assert!(outgoing(&composer(Target::Quote(quoted.id), Some(quoted.clone()), "")).starts_with("nostr:nevent1"));
+        // What a reply answers is in its tags, not in what it says.
+        assert_eq!(outgoing(&composer(Target::Reply(quoted.id), Some(quoted), "gn to you")), "gn to you");
+    }
+
+    #[test]
+    fn what_is_looked_at_takes_the_notes_found_for_it_only_while_it_says_the_same() {
+        let me = Keys::generate().public_key();
+        let quoted = Note { id: EventId::from_byte_array([3; 32]), ..Note::being_written("gn", &[], me, 0) };
+        let said = outgoing(&composer(Target::Quote(quoted.id), Some(quoted.clone()), "this"));
+        let shown = Note::being_written(&said, &[], me, 0);
+        let found = shown.clone().with_quoted(&HashMap::from([(quoted.id, quoted)]));
+        assert_eq!(found.quoted_count(), 1);
+
+        assert!(is_the_same_with_more(&shown, &found), "the note it quotes was found");
+        assert!(is_the_same_with_more(&found, &found), "found again, the same");
+        assert!(!is_the_same_with_more(&found, &shown), "what is at hand is not given up for less");
+        // It was written to meanwhile: what was found is of what it said.
+        let changed = Note::being_written(&format!("{said} too"), &[], me, 0);
+        assert!(!is_the_same_with_more(&changed, &found));
+    }
 
     #[test]
     fn backspace_leaves_an_empty_composer_and_asks_before_leaving_one_with_something_in_it() {

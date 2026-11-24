@@ -330,6 +330,12 @@ pub enum Message {
     ComposeQuote(EventId),
     /// Something was typed, selected or moved in the composer
     ComposeEdited(text_editor::Action),
+    /// Writing or looking at how it would show was chosen, in the composer
+    SelectComposeTab(segmented_button::Entity),
+    /// The other of writing and looking at how it would show (Ctrl+P)
+    ToggleComposePreview,
+    /// What is being written, with the notes it quotes that were found
+    ComposePreviewed(Note),
     /// Leave the composer, keeping what was written
     CloseComposer,
     /// Backspace was pressed in the composer's text with nothing left in it: leave the composer

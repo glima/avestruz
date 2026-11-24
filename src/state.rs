@@ -661,6 +661,26 @@ pub struct Composer {
     /// left to rub out: a Backspace held down to rub out all of it is
     /// not one that leaves.
     pub rubbed: Option<Instant>,
+    /// What is written as it would show once it is out, while that is
+    /// looked at in place of the text. The text is not written to
+    /// meanwhile.
+    pub preview: Option<Preview>,
+}
+
+/// What is being written, as a row would show it if it went out as it is.
+pub struct Preview {
+    /// It, as a note: one with no id of its own yet.
+    pub note: Note,
+    /// Nothing, ever: a row is built with the notes its list shows in
+    /// full, and this is no list. What is written shows whole as it is.
+    pub expanded: Expanded,
+}
+
+impl Preview {
+    /// The preview of `note`.
+    pub fn of(note: Note) -> Self {
+        Self { note, expanded: Expanded::default() }
+    }
 }
 
 /// How far the zap of a note has got.
@@ -949,6 +969,11 @@ pub struct AppModel {
 
     /// The note or reply being written, while the composer is open.
     pub composer: Option<Composer>,
+    /// The choice between writing it and looking at how it would show, as
+    /// the control that offers it keeps it: each choice carries whether it
+    /// is the look, and the one chosen is whether [`Composer::preview`] is
+    /// there.
+    pub compose_tabs: segmented_button::SingleSelectModel,
     /// What was written and left unpublished, by what it was written to.
     pub drafts: Drafts,
     /// Where the draft of a new note is kept between runs.

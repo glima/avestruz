@@ -226,7 +226,9 @@
 //! # Publishing
 //!
 //! A note, a reply and a quote are written in the same composer and go
-//! out the same way.
+//! out the same way. Before it goes out, what is written can be looked at
+//! as it would show: what would be sent is read as a note is, with no key
+//! asked for and nothing sent (see [`crate::handlers::compose`]).
 //!
 //! ```mermaid
 //! sequenceDiagram

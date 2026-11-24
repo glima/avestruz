@@ -1529,6 +1529,14 @@ impl NostrService {
         notes.pop().unwrap_or_else(|| Note::from(event))
     }
 
+    /// `note`, which is being written, with the notes it quotes: from the
+    /// store, and from the relays for those the store doesn't have, as a
+    /// list of notes would look for them.
+    pub async fn quoting(&self, note: Note) -> Note {
+        let mut notes = self.with_quotes(vec![note.clone()], Source::Relays).await;
+        notes.pop().unwrap_or(note)
+    }
+
     /// The conversation the note `focused` is part of, as far as `source`
     /// knows it: the note in full, and the others as rows show them. Empty
     /// if the note itself is not to be found.

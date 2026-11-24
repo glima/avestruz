@@ -5,7 +5,7 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 
-use nostr_sdk::prelude::{CommentTarget, Event, EventId, Kind, Metadata, PublicKey, Tags, ToBech32, Url, nip22};
+use nostr_sdk::prelude::{CommentTarget, Event, EventId, Kind, Metadata, PublicKey, Tag, Tags, ToBech32, Url, nip22};
 
 use crate::helpers::truncate_chars;
 use crate::nostr::content::{self, Content, FEED_NOTE_MAX_CHARS, MAX_NOTE_QUOTES, Quote, imeta, link_label};
@@ -158,6 +158,23 @@ impl Note {
         Self::new(event, usize::MAX)
     }
 
+    /// What `author` is writing, as a row would show it in full if it went
+    /// out now as it is, with `said` for what it says of the files it
+    /// links to. It is no note yet, and has no id of its own; the notes it
+    /// quotes are for whoever has them to add.
+    pub fn being_written(text: &str, said: &[Tag], author: PublicKey, now: u64) -> Self {
+        let attached: Vec<_> = said.iter().filter_map(|tag| imeta(tag.as_slice())).collect();
+        Self {
+            id: EventId::from_byte_array([0; 32]),
+            kind: Kind::TextNote,
+            author,
+            created_at: now,
+            content: content::parse_attached(text, usize::MAX, &attached),
+            reply_to: None,
+            quoted: Vec::new(),
+        }
+    }
+
     /// Whether it answers something, rather than starting a conversation.
     /// A comment always does, whatever it is about.
     pub fn is_reply(&self) -> bool {
@@ -293,6 +310,22 @@ mod tests {
                 .collect(),
         );
         note_reply_to(&tags).map(|ReplyTo { root, parent }| (root, parent))
+    }
+
+    #[test]
+    fn what_is_being_written_reads_as_the_note_it_would_be() {
+        let keys = Keys::generate();
+        let text = "# gm\nlook at **this**\nhttps://cdn.example.com/a.jpg\n".to_string() + &"and more ".repeat(200);
+        let said = Tag::parse(["imeta", "url https://cdn.example.com/a.jpg", "dim 800x600"]).unwrap();
+
+        let written = Note::being_written(&text, std::slice::from_ref(&said), keys.public_key(), 7);
+        let event = EventBuilder::new(Kind::TextNote, &text).tags([said]).finalize(&keys).unwrap();
+        let published = Note::in_full(&event);
+
+        assert_eq!(written.content, published.content, "as the note in full would read, once out");
+        assert!(written.content.whole.is_none(), "nothing of it is cut, long as it is");
+        assert_eq!(written.content.images[0].size, Some((800, 600)), "what it says of a file attached counts");
+        assert_eq!((written.author, written.created_at, written.reply_to), (keys.public_key(), 7, None));
     }
 
     #[test]
