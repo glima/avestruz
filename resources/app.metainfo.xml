@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.cosmic-applet-avestruz</id>
+  <name>Avestruz</name>
+  <summary>A Nostr client in the COSMIC panel</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <description>
+    <p>
+      Read and write Nostr from your COSMIC panel: a button in the panel,
+      and a popup that is the whole client.
+    </p>
+    <ul>
+      <li>The feed of the people you follow, read from the relays each of them writes to</li>
+      <li>Threads, profiles, search, notifications and private bookmarks</li>
+      <li>Notes, replies and quotes, with drafts kept and files attached through Blossom media servers</li>
+      <li>Reactions, reposts, and zaps by Lightning invoice</li>
+      <li>Pictures, link previews and videos shown and played in the feed</li>
+      <li>Sign in with a key kept in the system keyring, or with a remote signer</li>
+      <li>Your relay lists, with what each relay says of itself</li>
+      <li>A key for everything: step through notes, open, reply, repost, zap, bookmark</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">io.github.cosmic-applet-avestruz.desktop</launchable>
+  <provides>
+    <binary>cosmic-applet-avestruz</binary>
+  </provides>
+  <url type="homepage">https://github.com/glima/avestruz</url>
+  <url type="bugtracker">https://github.com/glima/avestruz/issues</url>
+  <developer id="io.github.glima">
+    <name>Avestruz authors</name>
+  </developer>
+  <categories>
+    <category>Network</category>
+  </categories>
+  <keywords>
+    <keyword>nostr</keyword>
+    <keyword>avestruz</keyword>
+    <keyword>social</keyword>
+    <keyword>cosmic</keyword>
+    <keyword>applet</keyword>
+  </keywords>
+  <content_rating type="oars-1.1" />
+</component>

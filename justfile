@@ -10,6 +10,7 @@ cargo-target-dir := env('CARGO_TARGET_DIR', 'target')
 bloat-target := cargo-target-dir / 'release-bloat' / name
 bin-dst := base-dir / 'bin' / name
 desktop-dst := base-dir / 'share' / 'applications' / appid + '.desktop'
+metainfo-dst := base-dir / 'share' / 'metainfo' / appid + '.metainfo.xml'
 icon-dst := base-dir / 'share' / 'icons' / 'hicolor' / 'scalable' / 'apps' / appid + '.svg'
 icon-symbolic-dst := base-dir / 'share' / 'icons' / 'hicolor' / 'symbolic' / 'apps' / appid + '-symbolic.svg'
 icon-scalable-symbolic-dst := base-dir / 'share' / 'icons' / 'hicolor' / 'scalable' / 'apps' / appid + '-symbolic.svg'
@@ -289,6 +290,7 @@ install-debug: (_install 'debug')
 _install profile:
     install -Dm0755 {{ cargo-target-dir / profile / name }} {{ bin-dst }}
     install -Dm0644 resources/app.desktop {{ desktop-dst }}
+    install -Dm0644 resources/app.metainfo.xml {{ metainfo-dst }}
     install -Dm0644 resources/icon.svg {{ icon-dst }}
     install -Dm0644 resources/icon.svg {{ icon-symbolic-dst }}
     install -Dm0644 resources/icon.svg {{ icon-scalable-symbolic-dst }}
@@ -306,4 +308,4 @@ emoji-font-setup:
 
 # Uninstalls installed files
 uninstall:
-    rm -f {{ bin-dst }} {{ desktop-dst }} {{ icon-dst }} {{ icon-symbolic-dst }} {{ icon-scalable-symbolic-dst }}
+    rm -f {{ bin-dst }} {{ desktop-dst }} {{ metainfo-dst }} {{ icon-dst }} {{ icon-symbolic-dst }} {{ icon-scalable-symbolic-dst }}

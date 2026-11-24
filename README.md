@@ -516,10 +516,22 @@ account's search relays, which see the words searched for; a name at a
 domain typed there goes to that domain, and a relay's address to that
 relay.
 
+## Installing
+
+A release has a `.deb` and an `.rpm` for x86_64 and aarch64, and a
+tarball of the same files for anything else, with their checksums
+(`SHA256SUMS`). The packages name what the applet needs to run, and
+recommend the GStreamer plugins most videos are decoded with and yt-dlp
+for YouTube; what yt-dlp itself needs to read YouTube is said under
+[Building](#building). Once installed, add **Avestruz** to the panel
+from COSMIC Settings → Desktop → Panel → Applets.
+
 ## Building
 
 Dependencies are those of any libcosmic application (a Rust toolchain,
-`libxkbcommon`, Wayland development files), GStreamer's development files
+`libxkbcommon`, Wayland development files), D-Bus's development files
+(`libdbus-1-dev` on Debian and its kin, `dbus-devel` on Fedora, `dbus` on
+Arch), GStreamer's development files
 (`libgstreamer1.0-dev` and `libgstreamer-plugins-base1.0-dev` on Debian and
 its kin, `gstreamer1-devel` and `gstreamer1-plugins-base-devel` on Fedora,
 `gstreamer` and `gst-plugins-base` on Arch), plus a Secret Service provider
@@ -560,7 +572,7 @@ differently for it. Deleting the file undoes it.
 ```sh
 just                # release build
 just run            # run outside the panel: a small window holding the button
-sudo just install   # binary, desktop entry and icon under /usr; and your yt-dlp set up for YouTube
+sudo just install   # binary, desktop entry, metainfo and icon under /usr; and your yt-dlp set up for YouTube
 just yt-dlp-setup   # only that last part, as yourself
 just emoji-font-setup  # an emoji font that can be drawn in colour, where the system's can't
 ```
@@ -656,7 +668,7 @@ src/
 │   └── *.rs        # Popup, login, feed, thread, profile, compose, zap, settings, what the keys do
 └── *.rs            # App model, the button in the panel (and the line between it and the window), state, messages, config, drafts, http, media (a file to attach: its kind, and a picture without what it says beside the picture), images (fetching and keeping pictures), previews (what linked pages say of themselves), video (playing the videos notes link to), youtube (which links are YouTube videos, and asking yt-dlp for one), requests (what views ask to be fetched), screen (how tall it is), links, logging, helpers, i18n
 build.rs            # Writes the list of tests the docs show
-.github/            # What GitHub runs: the checks and tests on every push, code scanning, dependency updates
+.github/            # What GitHub runs: the checks and tests on every push, code scanning, dependency updates, and a release for every `vX.Y.Z` tag
 fuzz/               # The fuzz targets, a crate of their own (cargo-fuzz)
 docs/               # The script that draws the docs' diagrams
 tools/mermaid-check # Parses the diagrams in the doc comments

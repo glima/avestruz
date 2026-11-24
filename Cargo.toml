@@ -139,6 +139,67 @@ default = ["wgpu"]
 # the CPU.
 wgpu = ["libcosmic/wgpu"]
 
+# The packages the release workflow builds (.github/workflows/release.yml):
+# what `just install` installs, at the same places.
+[package.metadata.deb]
+name = "cosmic-applet-avestruz"
+copyright = "© Avestruz authors"
+license-file = "LICENSE"
+section = "net"
+# Said here, or cargo-deb takes the whole README for it.
+extended-description = """\
+A Nostr client that lives in the COSMIC panel: a button in the panel, and \
+a popup that holds the whole client. The feed of the people you follow, \
+threads, profiles, search, notifications and private bookmarks; notes, \
+replies and quotes, with files attached through Blossom media servers; \
+reactions, reposts and zaps; pictures, link previews and videos shown and \
+played in the feed."""
+# What the binary links against, the Wayland client library it opens at run
+# time, and the GStreamer plugins a video is fetched over https with. The
+# plugins most videos are decoded with, and yt-dlp for YouTube, are
+# recommended: without them the applet runs, and a video says why it can't
+# be played.
+depends = "libc6, libdbus-1-3, libxkbcommon0, libwayland-client0, libgstreamer1.0-0, libgstreamer-plugins-base1.0-0, gstreamer1.0-plugins-base, gstreamer1.0-plugins-good"
+recommends = "gstreamer1.0-plugins-bad, gstreamer1.0-libav, yt-dlp"
+assets = [
+    ["target/release/cosmic-applet-avestruz", "usr/bin/", "755"],
+    ["resources/app.desktop", "usr/share/applications/io.github.cosmic-applet-avestruz.desktop", "644"],
+    ["resources/app.metainfo.xml", "usr/share/metainfo/io.github.cosmic-applet-avestruz.metainfo.xml", "644"],
+    # The one icon, under its own name and under the symbolic one the
+    # desktop entry asks for (see `_install` in the justfile).
+    ["resources/icon.svg", "usr/share/icons/hicolor/scalable/apps/io.github.cosmic-applet-avestruz.svg", "644"],
+    ["resources/icon.svg", "usr/share/icons/hicolor/symbolic/apps/io.github.cosmic-applet-avestruz-symbolic.svg", "644"],
+    ["resources/icon.svg", "usr/share/icons/hicolor/scalable/apps/io.github.cosmic-applet-avestruz-symbolic.svg", "644"],
+    ["LICENSE", "usr/share/doc/cosmic-applet-avestruz/LICENSE", "644"],
+]
+
+[package.metadata.generate-rpm]
+name = "cosmic-applet-avestruz"
+assets = [
+    { source = "target/release/cosmic-applet-avestruz", dest = "/usr/bin/", mode = "755" },
+    { source = "resources/app.desktop", dest = "/usr/share/applications/io.github.cosmic-applet-avestruz.desktop", mode = "644" },
+    { source = "resources/app.metainfo.xml", dest = "/usr/share/metainfo/io.github.cosmic-applet-avestruz.metainfo.xml", mode = "644" },
+    { source = "resources/icon.svg", dest = "/usr/share/icons/hicolor/scalable/apps/io.github.cosmic-applet-avestruz.svg", mode = "644" },
+    { source = "resources/icon.svg", dest = "/usr/share/icons/hicolor/symbolic/apps/io.github.cosmic-applet-avestruz-symbolic.svg", mode = "644" },
+    { source = "resources/icon.svg", dest = "/usr/share/icons/hicolor/scalable/apps/io.github.cosmic-applet-avestruz-symbolic.svg", mode = "644" },
+    { source = "LICENSE", dest = "/usr/share/doc/cosmic-applet-avestruz/LICENSE", doc = true, mode = "644" },
+]
+
+[package.metadata.generate-rpm.requires]
+glibc = "*"
+dbus-libs = "*"
+libxkbcommon = "*"
+libwayland-client = "*"
+gstreamer1 = "*"
+gstreamer1-plugins-base = "*"
+gstreamer1-plugins-good = "*"
+
+# As the .deb recommends. The libav plugins, which decode what most videos
+# are in, come from RPM Fusion (gstreamer1-libav) and can't be named here.
+[package.metadata.generate-rpm.recommends]
+gstreamer1-plugins-bad-free = "*"
+yt-dlp = "*"
+
 [profile.release]
 strip = true
 lto = "thin"
