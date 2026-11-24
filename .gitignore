@@ -1,0 +1,9 @@
+.cargo/
+*.pdb
+**/*.rs.bk
+debug/
+target/
+coverage/
+# Delta agent worktrees, checked out inside this repo
+.delta/
+node_modules/

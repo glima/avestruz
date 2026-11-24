@@ -1,0 +1,11 @@
+# Cargo nextest configuration.
+#
+# Has every run write its results as JUnit XML, which CI uploads to
+# Codecov Test Analytics: flaky-test trends, slow-test rankings and recent
+# failures, alongside coverage.
+#
+# Output path:
+#   target/nextest/default/junit.xml  ← `cargo nextest run`, `just test`
+
+[profile.default.junit]
+path = "junit.xml"

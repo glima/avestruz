@@ -1,0 +1,96 @@
+name: "CodeQL"
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  schedule:
+    # Run weekly on Monday at 06:00 UTC
+    - cron: "0 6 * * 1"
+
+permissions: read-all
+
+env:
+  # Retry transient crates.io/registry download failures instead of failing.
+  CARGO_NET_RETRY: "10"
+
+jobs:
+  analyze:
+    name: Analyze (Rust)
+    runs-on: ubuntu-latest
+    # Code scanning takes results from a public repository, or from a
+    # private one that pays for it: while this one is private there is
+    # nowhere for them to go, and the job would only fail.
+    if: github.event.repository.private == false
+
+    permissions:
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libdbus-1-dev \
+            libxkbcommon-dev \
+            libwayland-dev \
+            libgstreamer1.0-dev \
+            libgstreamer-plugins-base1.0-dev
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: rust
+
+      # Same dependency cache as CI, under its own key: CodeQL builds through
+      # its extractor, so its artifacts are not interchangeable with the ones
+      # the build or coverage jobs produce.
+      - name: Cache cargo registry and build artifacts
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: codeql
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build
+        run: |
+          # The extractor builds its database by watching the compiler work, so
+          # our own crate has to compile here even on a cache hit: only the
+          # dependencies are safe to restore. Without this, a push that changed
+          # nothing cargo cares about would analyse almost nothing.
+          cargo clean -p cosmic-applet-avestruz
+          cargo build --verbose
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          category: "/language:rust"
+
+  # The workflow files themselves: script injection from PR titles and branch
+  # names, over-broad token permissions, unsafe pull_request_target checkouts.
+  # Nothing to build, so it needs no system packages or cargo.
+  analyze-actions:
+    name: Analyze (Actions)
+    runs-on: ubuntu-latest
+    if: github.event.repository.private == false
+
+    permissions:
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: actions
+          build-mode: none
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          category: "/language:actions"

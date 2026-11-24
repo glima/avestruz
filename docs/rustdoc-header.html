@@ -1,0 +1,125 @@
+<!-- SPDX-License-Identifier: MIT -->
+<!--
+  Draws the diagrams of the documentation.
+
+  A diagram is written in a doc comment as a ```mermaid fence, which rustdoc
+  emits as <pre class="language-mermaid"><code>…</code></pre>. `just doc`
+  passes this file to rustdoc as `--html-in-header`, and the script below
+  draws each such block in its place with Mermaid, in the colours of the
+  theme the page is read in, and again when the theme is changed. A click on
+  a diagram shows it as large as the window; a click or Escape puts it away.
+
+  Mermaid is loaded from a CDN when a page with a diagram is opened, at the
+  version `tools/mermaid-check` parses the diagrams with: change the two
+  together. A page without a diagram loads nothing. Without a network, or if
+  a diagram can't be drawn, the block stays as it is: text that can be read.
+-->
+<style>
+    figure.diagram {
+        margin: 1.2em 0;
+        padding: 0.6em;
+        text-align: center;
+        overflow-x: auto;
+        cursor: zoom-in;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+    }
+    figure.diagram svg {
+        max-width: 100%;
+        height: auto;
+    }
+    /* A diagram shown large: a copy of it over the whole window, as a child
+       of the body, since the page's own boxes don't let one of their
+       children out to the window's edges. */
+    div.diagram-enlarged {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        box-sizing: border-box;
+        padding: 2vmin;
+        cursor: zoom-out;
+        background: var(--main-background-color);
+    }
+    div.diagram-enlarged svg {
+        width: 100%;
+        height: 100%;
+        max-width: none !important;
+    }
+</style>
+<script type="module">
+    const MERMAID = "https://cdn.jsdelivr.net/npm/mermaid@12.3.0/dist/mermaid.esm.min.mjs";
+
+    // Whether the page is read on a dark background, whatever its theme is
+    // called.
+    function dark() {
+        const colour = getComputedStyle(document.body).backgroundColor.match(/\d+(\.\d+)?/g);
+        if (!colour) {
+            return false;
+        }
+        const [red, green, blue] = colour.map(Number);
+        return 0.2126 * red + 0.7152 * green + 0.0722 * blue < 128;
+    }
+
+    const fences = [...document.querySelectorAll("pre.language-mermaid")];
+    if (fences.length > 0) {
+        try {
+            const { default: mermaid } = await import(MERMAID);
+            // Each block gives way to a figure that keeps what it was drawn
+            // from, to be drawn again in another theme.
+            const figures = fences.map((fence) => {
+                const figure = document.createElement("figure");
+                figure.className = "diagram";
+                figure.dataset.source = fence.textContent;
+                figure.addEventListener("click", () => enlarge(figure));
+                // rustdoc wraps a code block in a box of its own, which goes
+                // with it.
+                return [fence.closest(".example-wrap") ?? fence, figure];
+            });
+
+            // Show the diagram of `figure` as large as the window, until it
+            // is clicked or Escape is pressed. It scales to fit: an SVG with
+            // a view box keeps its proportions in whatever room it is given.
+            function enlarge(figure) {
+                const large = document.createElement("div");
+                large.className = "diagram-enlarged";
+                large.innerHTML = figure.innerHTML;
+                large.addEventListener("click", () => large.remove());
+                document.body.append(large);
+            }
+            function put_away() {
+                document.querySelectorAll("div.diagram-enlarged").forEach((large) => large.remove());
+            }
+
+            let drawn = 0;
+            async function draw() {
+                put_away();
+                mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: dark() ? "dark" : "default" });
+                for (const [block, figure] of figures) {
+                    try {
+                        const { svg } = await mermaid.render(`diagram-${drawn++}`, figure.dataset.source);
+                        figure.innerHTML = svg;
+                        if (block.isConnected) {
+                            block.replaceWith(figure);
+                        }
+                    } catch (error) {
+                        // The block stays, or the diagram as it was drawn before.
+                        console.error("a diagram could not be drawn:", error);
+                    }
+                }
+            }
+            await draw();
+
+            new MutationObserver(draw).observe(document.documentElement, {
+                attributes: true,
+                attributeFilter: ["data-theme"],
+            });
+            document.addEventListener("keydown", (event) => {
+                if (event.key === "Escape") {
+                    put_away();
+                }
+            });
+        } catch (error) {
+            console.error("Mermaid could not be loaded, and the diagrams stay as text:", error);
+        }
+    }
+</script>

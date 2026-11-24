@@ -1,0 +1,14 @@
+{
+  "name": "avestruz-mermaid-check",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "Parses the Mermaid diagrams in the doc comments with the Mermaid release the built documentation draws them with (docs/rustdoc-header.html): change the two together.",
+  "scripts": {
+    "check": "node check.mjs ../../src"
+  },
+  "dependencies": {
+    "jsdom": "^31.0.0",
+    "mermaid": "12.3.0"
+  }
+}

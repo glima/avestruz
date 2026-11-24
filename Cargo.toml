@@ -1,0 +1,173 @@
+[package]
+name = "cosmic-applet-avestruz"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+authors = ["Avestruz authors"]
+description = "Avestruz — a COSMIC desktop applet for Nostr"
+repository = "https://github.com/glima/avestruz"
+
+[package.metadata.cargo-machete]
+# libcosmic re-exports its public API under the `cosmic` namespace, so
+# cargo-machete cannot detect that it is used (no `use libcosmic::…` anywhere).
+ignored = ["libcosmic"]
+
+[dependencies]
+futures-util = "0.3.31"
+i18n-embed-fl = "0.10"
+rust-embed = "8.7.2"
+tokio = { version = "1.48.0", features = ["fs", "io-std", "io-util", "macros", "net", "process", "rt", "sync", "time"] }
+
+# Nostr protocol, relay pool and signing; and, with its `local-relay`
+# feature, the relay Avestruz runs itself.
+nostr-sdk = { version = "0.45.6", features = ["local-relay"] }
+
+# The WebSocket that relay is spoken to over, on this end of the pipe to
+# it. The version `nostr-sdk` builds with, without what a pipe has no use
+# for: the handshake, the connecting, the TLS.
+tokio-tungstenite = { version = "0.28", default-features = false }
+
+# Signing with a remote signer (NIP-46): an account signed in with a
+# `bunker://` address keeps its key there, and asks for each signature.
+nostr-connect = "0.45.2"
+
+# The event store behind the client: every event a relay sends is kept here,
+# so the feed is there at once on the next start. LMDB rather than nostrdb
+# (`nostr-ndb`), whose crate is GPL-3.0-or-later.
+nostr-lmdb = "0.45.3"
+
+# Secure credential storage: an account's secret key lives in the system
+# keyring (Secret Service) and nowhere else.
+keyring = { version = "3", features = ["sync-secret-service"] }
+
+# Directory paths
+dirs = "7"
+
+# Opening a note's links in the system browser
+open = "5"
+
+# HTTP client for avatars, the images in notes, the pages notes link to, and
+# Lightning addresses.
+# Without a TLS crypto provider of its own: reqwest's `rustls` feature brings
+# aws-lc-rs, nostr-sdk
+# brings ring, and with both compiled in rustls can't pick one and panics on
+# the first connection. One provider, ring, installed by name in `main`.
+# `stream`: a file being uploaded is handed over a piece at a time, which is
+# how it is known how much of it has gone.
+reqwest = { version = "0.13.1", default-features = false, features = ["rustls-no-provider", "stream"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+
+# Reading the head of a web page a note links to, for the title, the
+# description and the picture it gives of itself. A tokenizer and no more:
+# what is read is somebody else's HTML, and none of it is built into a tree.
+html5gum = "0.9.1"
+
+# Reading what a Lightning address answers (LNURL-pay), which is JSON.
+serde_json = "1"
+
+# What a file is known by on a media server (Blossom): its SHA-256. And how
+# the event that authorizes an upload is put in a header.
+sha2 = "0.11"
+base64 = "0.22"
+
+# Settings that are not plain strings and numbers, as COSMIC's config keeps
+# them.
+serde = { version = "1", features = ["derive"] }
+
+# The QR code of an invoice, for a wallet on another device to scan.
+qrcode = { version = "0.14", default-features = false }
+
+# Decoding those pictures. Only the formats listed are decoded; a note's link
+# to anything else stays a link.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
+
+# Every emoji there is, with what each is called and the group it is in:
+# what a reaction is picked from, and what tells an emoji from other text.
+emojis = "0.9"
+
+# The scripts of Unicode, as the text system names them: what its list of
+# fonts to fall back to is asked by, which `fonts` puts the emoji fonts
+# at the head of.
+unicode-script = "0.5"
+
+# GStreamer: playing the videos notes link to. `playbin` fetches and
+# decodes, and an `appsink` hands the frames over as RGBA for the row to
+# draw. Needs GStreamer's libraries to build and to run, and its plugins
+# (base, good, bad, libav) to play much.
+gstreamer = "0.25"
+gstreamer-app = "0.25"
+gstreamer-video = "0.25"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "chrono"] }
+
+
+[dependencies.i18n-embed]
+version = "0.16"
+features = ["fluent-system", "desktop-requester"]
+
+[dependencies.libcosmic]
+git = "https://github.com/pop-os/libcosmic.git"
+features = [
+    # Panel applet: a button in the panel, and a popup window.
+    "applet",
+    "applet-token",
+    # Uses cosmic-settings-daemon to watch for config file changes
+    "dbus-config",
+    # Support creating additional application windows.
+    "multi-window",
+    # Uses tokio as the executor for the runtime
+    "tokio",
+    # Add Wayland support to winit
+    "wayland",
+    # The desktop's file chooser, to pick what is attached to a note.
+    "xdg-portal",
+    # Windowing support for X11, Windows, Mac, & Redox
+    "winit",
+]
+# `wgpu` is a feature of this crate's: see `[features]`.
+
+[features]
+default = ["wgpu"]
+# GPU rendering through wgpu, falling back to the CPU renderer where there
+# is no GPU to be had. It draws the window, which has a surface of its own
+# on the compositor. The button in the panel is drawn by the CPU either way
+# (see `button`): an applet's surfaces are the panel's, which takes no GPU
+# buffers from it, so wgpu would end up rendering it in software, slower
+# than the CPU renderer does. Without the feature everything is drawn by
+# the CPU.
+wgpu = ["libcosmic/wgpu"]
+
+[profile.release]
+strip = true
+lto = "thin"
+codegen-units = 4
+
+# Like release but keeps symbols so cargo-bloat can attribute sizes
+[profile.release-bloat]
+inherits = "release"
+strip = false
+
+[lints.rust]
+unreachable_pub = "warn" # Warn on `pub` items that are not reachable from the crate root — helps find dead code in binary crates
+
+[lints.clippy]
+# Production safety lints. The idea is to only apply to src/
+# directory. tests/ can deliberately allow them back, since there we
+# care less. Production exceptions to these should be used very
+# seldomly.
+expect_used = "deny"      # Avoid .expect() — it panics on None/Err; use proper error handling instead
+indexing_slicing = "deny" # Ban array[index] and slice[i] — use .get(i) instead to avoid panics on out-of-bounds access
+manual_assert = "deny"    # Prefer assert!(), assert_eq!(), etc. over manual if-else + panic! — it's cleaner and idiomatic
+panic = "deny"            # Disallow any usage of panic! macro — panics in production can crash the program
+unwrap_used = "deny"      # Avoid .unwrap() — it panics on None/Err; prefer match or ? for error propagation
+wildcard_imports = "deny" # Ban use foo::* — use explicit imports for clarity and to avoid namespace pollution
+
+[lints.rustdoc]
+# This is an application, not a published library: the lib target exists so the
+# integration tests can reach the modules, and most items are crate-internal.
+# Doc comments link to them freely, which is exactly what `just doc`
+# (--document-private-items) renders. Broken links are still caught by the
+# default `broken_intra_doc_links`.
+private_intra_doc_links = "allow"

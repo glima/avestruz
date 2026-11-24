@@ -1,0 +1,13 @@
+[Desktop Entry]
+Name=Avestruz
+Comment=Avestruz — a COSMIC desktop applet for Nostr
+Type=Application
+Icon=io.github.cosmic-applet-avestruz-symbolic
+Exec=cosmic-applet-avestruz
+Terminal=false
+StartupNotify=true
+Categories=COSMIC;Network;
+Keywords=COSMIC;Avestruz;Nostr;Social;
+NoDisplay=true
+X-CosmicApplet=true
+X-CosmicHoverPopup=Auto
