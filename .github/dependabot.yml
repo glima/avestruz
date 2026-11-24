@@ -5,14 +5,16 @@ updates:
     schedule:
       interval: "weekly"
 
-  # Main crate (crates.io deps). The git dep, libcosmic, tracks its upstream
-  # default branch and is updated by hand via `cargo update`; Dependabot
-  # leaves it alone and only bumps registry deps.
+  # Main crate. libcosmic, a git dependency, is held at the revision it was
+  # built and tried against and moved by hand (`cargo update -p libcosmic`):
+  # left to Dependabot it is moved to the tip of its branch every week.
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    ignore:
+      - dependency-name: "libcosmic"
 
   # The cargo-fuzz harness is a *separate* workspace, so its lockfile isn't
   # touched by the main `cargo update` and drifts: stale entries then trip
@@ -23,3 +25,6 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    ignore:
+      # At the revision the main crate is at: see above.
+      - dependency-name: "libcosmic"
